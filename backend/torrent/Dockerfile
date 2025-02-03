@@ -1,23 +1,16 @@
-# Use a lightweight Python image
-FROM python:3.9-slim-buster
+FROM alpine:3.18
 
-# Set working directory inside the container
+# Install aria2 & curl for downloading the torrent file + selecting file
+RUN apk add --no-cache aria2 curl
+
 WORKDIR /app
 
-# Copy the requirements file
-COPY requirements.txt /app/
+# Copy our download script
+COPY download.sh /app/download.sh
+RUN chmod +x /app/download.sh
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Expose a directory for our final downloads
+VOLUME ["/downloads"]
 
-# Copy the rest of the project files
-COPY . /app
-
-# Ensure the downloads directory exists
-RUN mkdir -p /app/downloads
-
-# Expose ports for torrents
-EXPOSE 6881 6891
-
-# Run the torrent download script
-CMD ["python3", "download_torrent.py"]
+RUN apk add --no-cache bash
+CMD ["/bin/bash", "/app/download.sh"]
