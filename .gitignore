@@ -1,3 +1,7 @@
 downloads/
 .env
 __pycache__/
+*jsonl
+*pickle
+*xlsx
+*png
