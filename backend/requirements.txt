@@ -1,1 +1,6 @@
 flask
+pandas
+requests
+
+#maybe needed for excel
+openpyxl
