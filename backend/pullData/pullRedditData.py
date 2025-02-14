@@ -66,23 +66,20 @@ def scrape_to_json(url):
 def scrape_reddit(base_url, save_dir, search_string, subreddit, type=None, n=None):
     
     keys_to_keep = [
-        'subreddit',
         'author',
         'created_utc',
         'body',
-        'id'
+        'id',
+        'link_id'
     ]
     
-    if os.path.exists(f'{save_dir}db_{subreddit}_{search_string}_{type}.pickle'):
-        discussions = pd.read_pickle(f'{save_dir}db_{subreddit}_{search_string}_{type}.pickle')
+    if os.path.exists(f'{save_dir}db_{subreddit}_{type}.pickle'):
+        discussions = pd.read_pickle(f'{save_dir}db_{subreddit}_{type}.pickle')
         print(f'Old discussions file loaded! Number of discussions: {len(discussions)}')
     else:
         print('Discussions file not found; restarting.')
         discussions = scrape_to_json(base_url)
-        if type == 'posts':
-            discussions['body'] = discussions['title'] + '. ' + discussions['selftext']
-        discussions = discussions[keys_to_keep]
-        discussions = preprocess_db(discussions)
+        discussions = preprocess_db(discussions, type, keys_to_keep)
 
 
     n_discussions = len(discussions)
@@ -96,18 +93,16 @@ def scrape_reddit(base_url, save_dir, search_string, subreddit, type=None, n=Non
         if next_discs is None:
             print('No discussions found, so let\'s try this again...')
             continue
+        elif next_discs.empty:
+           break
 
-        if type == 'posts':
-            next_discs['body'] = next_discs['title'] + '. ' + next_discs['selftext']
-
-        next_discs = next_discs[keys_to_keep]
-        next_discs = preprocess_db(next_discs)
+        next_discs = preprocess_db(next_discs, type, keys_to_keep)
         n_discussions = len(next_discs)
                 
         discussions = pd.concat([discussions, next_discs])
 
         print(f'Total {type} so far: {discussions.shape[0]}')
-        discussions.to_pickle(f'{save_dir}db_{subreddit}_{search_string}_{type}.pickle')
+        discussions.to_pickle(f'{save_dir}db_{subreddit}_{type}.pickle')
         if n: 
             if n <= discussions.shape[0]: break
             
@@ -134,12 +129,11 @@ def get_reddit_data(save_dir, search_strings = [''], subreddit = 'TrigeminalNeur
     '''
     
     discussions = pd.DataFrame(columns=[
-        'subreddit',
         'author',
         'created_utc',
         'body',
-        'type'
         'id',
+        'link_id'
     ])
     
     for search_string in search_strings:
@@ -150,13 +144,11 @@ def get_reddit_data(save_dir, search_strings = [''], subreddit = 'TrigeminalNeur
         # First, let's start by searching all posts.
         post_url = create_base_url('submission', search_string, subreddit)
         posts = scrape_reddit(post_url, save_dir, search_string, subreddit, type='posts', n=n)
-        posts['type'] = 'post'
         if (search_string !=['']): posts['search_string'] = search_string
 
         # Now, let's search all comments.
         comment_url = create_base_url('comment', search_string, subreddit)
         comments = scrape_reddit(comment_url, save_dir, search_string, subreddit, type='comments', n=n)
-        comments['type'] = 'comment'
         if (search_string !=['']): comments['search_string'] = search_string
         
         discussions = pd.concat([discussions, posts, comments])
@@ -166,53 +158,53 @@ def get_reddit_data(save_dir, search_strings = [''], subreddit = 'TrigeminalNeur
 
     return discussions
 
-def preprocess_db(df):
+def preprocess_db(df, type, keys_to_keep):
+    if type == 'posts':
+        df['body'] = df['title'] + '. ' + df['selftext']
+        df['link_id'] = ''
+    df = df[keys_to_keep]
+
     # Fill empty cells and remove some weird html tags
     # Also removes entries shorter than 20 chars
-    df['body'] = df['body'].fillna('')
+    df.loc[:,'body'] = df.loc[:,'body'].fillna('')
     df.dropna(axis=1, how='all')
-    df['body'] = df['body'].str.replace("http\S+", "")
-    df['body'] = df['body'].str.replace("\\n", " ")
-    df['body'] = df['body'].str.replace("&gt;", "")
-    df['body'] = df['body'].str.replace('\s+', ' ', regex=True)
-    df['body_len'] = df['body'].str.len()
-    df = df.query('body_len >= 20')
+    df.loc[:,'body'] = df['body'].str.replace("http\S+", "")
+    df.loc[:,'body'] = df['body'].str.replace("\\n", " ")
+    df.loc[:,'body'] = df['body'].str.replace("&gt;", "")
+    df.loc[:,'body'] = df['body'].str.replace('\s+', ' ', regex=True)
+    mask = df['body'].str.len()
+    df = df[mask >= 25]
     return df
 
-if __name__ == '__main__':
+def load_reddit_data(output_dir, subreddit, n = None):
 
     """
     Scrape the subreddit r/TrigeminalNeuralgia
-    """
     parser = argparse.ArgumentParser()
     parser.add_argument('subreddit', type=str, help='Subreddit to pull data from')
     parser.add_argument('-n', type=int, help='Number of posts and comments to scrape')
     args = parser.parse_args()
-
     output_dir = os.getcwd() + '/scrapedData/'
-    
-    start_time = time.time()
-    full_db = get_reddit_data(output_dir, [''], args.subreddit, args.n)
+    """
 
-    if not args.n:
+    start_time = time.time()
+    full_db = get_reddit_data(output_dir, [''], subreddit, n)
+
+    if not n:
         n = full_db.shape[0]
     else:
-        n = args.n
+        n = n
     print(f"Time in seconds to gather {n} posts/comments: {time.time()-start_time}")
 
-    full_db.to_pickle(output_dir + f'{args.subreddit}_full_db.pickle')
-    print(f"Time after saving to pickle: {time.time()-start_time}") 
-
     try:
-        full_db.to_excel(output_dir + f'{args.subreddit}_full_db.xlsx')
+        full_db.to_excel(output_dir + f'{subreddit}_full_db.xlsx')
     except:
         print('Failed to export Excel file.')
     print(f"Time after saving to excel: {time.time()-start_time}") 
 
-'''
-    data = requests.get('https://api.pullpush.io/reddit/search/comment/?subreddit=TrigeminalNeuralgia&q=')
-    data_json = json.loads(data.content)
-    
-    data_pd = pd.DataFrame(data_json['data'])
-    data_pd.to_excel(output_dir + 'full_db.xlsx')
+''' argument parseing code
+    parser = argparse.ArgumentParser()
+    parser.add_argument('subreddit', type=str, help='Subreddit to pull data from')
+    parser.add_argument('-n', type=int, help='Number of posts and comments to scrape')
+    args = parser.parse_args()
 '''
