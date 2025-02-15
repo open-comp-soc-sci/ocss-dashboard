@@ -14,13 +14,10 @@ def index():
 @main.route("/profile")
 @login_required
 def profile():
-    if "user_id" not in session:
-        flash("User is not logged in.", "warning")
-        return redirect(url_for("main.index"))
-    
     user = Users.query.filter_by(username=current_user.username).first()
     
     if user:
         return render_template('profile.html', username=current_user.username)
     else:
+        flash("User is not logged in.", "warning")
         return redirect(url_for("main.index"))
