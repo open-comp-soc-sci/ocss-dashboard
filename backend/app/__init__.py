@@ -1,5 +1,6 @@
 from flask_login import LoginManager
 from flask import Flask
+from dotenv import load_dotenv
 import os
 
 from app.extensions import db
@@ -9,8 +10,8 @@ from app.models import Users
 
 def create_app():
     app = Flask(__name__)
+    load_dotenv()
     app.config.from_prefixed_env()
-
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')  
 
     db.init_app(app)
