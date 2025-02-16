@@ -1,7 +1,29 @@
 {% extends "base.html" %}
 
 {% block content %}
-<p>OCSS Template Profile Page</p>
 <p>Welcome {{username}}!</p>
-<p>Could include search history here, unless we only want to use the home page.</p>
+<br>
+<p>Search History</p>
+
+{% if search_history %}
+    <table border="1" style="margin-left:auto; margin-right:auto;">
+        <thead>
+            <tr>
+                <th>Search Query</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in search_history %}
+            <tr>
+                <td>{{ entry.search_query }}</td>
+                <td>{{ entry.created_utc }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>No search history available.</p>
+{% endif %}
+
 {% endblock %}
