@@ -1,10 +1,11 @@
 import os
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+from readpickle import filtered_bodies
 
 
 # token is causing "secret" issues when pushing to github
 # ill just message u guys the api token
-HUGGINGFACE_API_TOKEN = ' '
+HUGGINGFACE_API_TOKEN = '***REMOVED***'
 os.environ['HUGGINGFACEHUB_API_TOKEN'] = HUGGINGFACE_API_TOKEN
 
 
@@ -27,8 +28,9 @@ def run_classification(text):
 # LABEL_1 : NEUTRAL
 # LABEL_0 : Negative
 
-
-input_text = "I love using HuggingFace models for NLP tasks!"
-result = run_classification(input_text)
-print(f"Input: {input_text}")
-print(f"Classification: {result}")
+# Iterate through each body text, classify sentiment, and print the result
+for index, input_text in enumerate(filtered_bodies):
+    if len(input_text) < 514:  # Only run for texts that are less than 514 characters
+        result = run_classification(input_text)
+        print(f"Index {index}: {input_text}")
+        print(f"Classification: {result}\n")
