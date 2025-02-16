@@ -5,6 +5,15 @@
     OCSS Template Page
 </h1>
 <h2 class="subtitle">
-    Include the normal functions here. Logging in to show history?
+    Temporary Search
 </h2>
+<form method="POST">
+    <label for="search_query">Search Query:</label>
+    <div class="field">
+        <div class="control" style="display: flex; align-items: center; justify-content: center;">
+            <input type="input is-large" type="text" id="search_query" name="search_query" required>
+        </div>
+    </div>
+    <button type="submit">Submit</button>
+</form>
 {% endblock %}
