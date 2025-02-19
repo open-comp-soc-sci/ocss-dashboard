@@ -10,6 +10,7 @@ function SignIn() {
                 const userEmail = data.user.email
                 setValue(userEmail)
                 localStorage.setItem("email", userEmail)
+                //would be better to update the navbar rather than a full page reload
                 window.location.reload();
             })
             .catch((error) => {

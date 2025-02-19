@@ -8,7 +8,7 @@ from flask_login import UserMixin
 
 from app.extensions import db
 
-#User Model
+#User Model (modify to only have email and as primary to use as foreign key for search?)
 class Users(UserMixin, db.Model):
     __tablename__ = 'users'
     user_id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
