@@ -1,16 +1,10 @@
-FROM alpine:3.18
+# Dockerfile
 
-# Install aria2 & curl for downloading the torrent file + selecting file
-RUN apk add --no-cache aria2 curl
+FROM clickhouse/clickhouse-server:latest
 
-WORKDIR /app
+# Copy our custom entrypoint script into the image
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Copy our download script
-COPY download.sh /app/download.sh
-RUN chmod +x /app/download.sh
-
-# Expose a directory for our final downloads
-VOLUME ["/downloads"]
-
-RUN apk add --no-cache bash
-CMD ["/bin/bash", "/app/download.sh"]
+# Use our script as the container entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
