@@ -23,10 +23,10 @@ class Users(UserMixin, db.Model):
 class SearchHistory(db.Model):
     __tablename__ = 'searchHistory'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(UUID(as_uuid=True), db.ForeignKey('users.user_id'), nullable=False, index=True)
+    email = db.Column(db.String(), nullable=False)
     search_query = db.Column(db.String(200), nullable=False)
     created_utc = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
-    user = db.relationship('Users', backref=db.backref('search_histories', lazy=True))
+    #user = db.relationship('Users', backref=db.backref('search_histories', lazy=True))
     
 # unimplemented RedditData model class. 
 class RedditData(Base):
