@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from app.models import SearchHistory
 from app.extensions import db
 
@@ -12,12 +12,19 @@ main = Blueprint("main", __name__)
 def addSearch():
     data = request.get_json()
 
-    search_query = data.get("search_query")
+    subreddit = data.get("subreddit")
+    sentimentKeywords = data.get("sentimentKeywords")
+    startDate = data.get("startDate")
+    endDate = data.get("endDate")
     email = data.get("email")
 
     new_search = SearchHistory(
         email=email,
-        search_query=search_query,
+        subreddit=subreddit,
+        sentimentKeywords=sentimentKeywords,
+        #temp dates, wait for frontend date selector creation
+        startDate=startDate,
+        endDate=endDate,
         created_utc=datetime.now(timezone.utc)
     )
 
@@ -35,7 +42,10 @@ def getSearch(email):
         search_form = [
             {
                 "search_id": item.id,
-                "search_query": item.search_query,
+                "subreddit": item.subreddit,
+                "sentimentKeywords": item.sentimentKeywords,
+                "startDate": item.startDate,
+                "endDate": item.endDate,
                 "created_utc": item.created_utc.strftime("%Y-%m-%d %H:%M:%S")
             }
             for item in search_data
