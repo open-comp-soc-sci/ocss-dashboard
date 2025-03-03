@@ -1,8 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import ReactDatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+
 
 function Data() {
   const [searchData, setSearchData] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [subreddit, setSubreddit] = useState('');
+  const [sentimentKeywords, setSentimentKeywords] = useState('');
+
+  const [dates, setDates] = useState('');
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+
+  const [searchTerms, setSearchTerms] = useState([]);
+
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
 
@@ -16,8 +27,13 @@ function Data() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          search_query: searchQuery,
-          email: email
+          subreddit: `r/${subreddit}`,
+          sentimentKeywords: sentimentKeywords,
+          startDate: startDate, 
+          endDate: endDate,
+          dateText: dates,
+          searchTerms: searchTerms,
+          email: email,
         }),
       });
 
@@ -51,6 +67,21 @@ function Data() {
     fetchSearchHistory();
   }, [email]);
 
+  const handleKeywordKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const newTerm = e.target.value.trim();
+      if (newTerm && !searchTerms.includes(newTerm)) {
+        setSearchTerms((prevTerms) => [...prevTerms, newTerm]);
+      }
+      e.target.value = '';
+    }
+  };
+
+  const removeTerm = (term) => {
+    setSearchTerms(searchTerms.filter((t) => t !== term));
+  };
+
   return (
     <div
       className="container mt-5"
@@ -67,53 +98,81 @@ function Data() {
           <h2>Subreddit Search</h2>
           <p>(Query should include parameter options from wireframe)</p>
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <input
-                type="text"
-                className="form-control"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Enter your search here"
-              />
+          <div className="form-group">
+              <label>Subreddit</label>
+              <div className="input-group">            
+                <span className="input-group-text text-muted">r/</span>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={subreddit}
+                  onChange={(e) => setSubreddit(e.target.value)}
+                  placeholder="Enter subreddit (e.g. survivor)"
+                />
+              </div>
             </div>
-          </form>
 
           <div className="mt-4">
           <h2>Sentiment Keywords</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <input
-                type="text"
-                className="form-control"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Enter your search here"
-              />
+          <div className="form-group">
+                <label>Type a keyword and press Enter</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  onKeyDown={handleKeywordKeyDown}
+                  placeholder="e.g. happy"
+                />
+              </div>
+              {/* Display search terms as removable chips */}
+              <div className="mt-2">
+                {searchTerms.map((term, index) => (
+                  <span
+                    key={index}
+                    className="badge bg-primary me-2"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => removeTerm(term)}
+                  >
+                    {term} <span className="ms-1">&times;</span>
+                  </span>
+                ))}
+              </div>
             </div>
-          </form>
-          </div>
           
           <div className="mt-4">
           <h2>Dates</h2>
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <input
-                type="text"
-                className="form-control"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Enter your search here"
-              />
+              <div className="mt-3">
+                <label>Select Start Date:        </label>
+                <ReactDatePicker
+                  selected={startDate}
+                  onChange={(date) => setStartDate(date)}
+                  selectsStart
+                  startDate={startDate}
+                  endDate={endDate}
+                  className="form-control"
+                  placeholderText="Start Date"
+                />
+              </div>
+              <div className="mt-3">
+                <label>Select End Date:    </label>
+                <ReactDatePicker
+                  selected={endDate}
+                  onChange={(date) => setEndDate(date)}
+                  selectsEnd
+                  startDate={startDate}
+                  endDate={endDate}
+                  minDate={startDate} // ensures end date isn't before start date
+                  className="form-control"
+                  placeholderText="End Date"
+                />
+              </div>
             </div>
-          </form>
-          </div>
 
           <div className="mt-4">
           <button type="submit" className="btn btn-primary mt-2">
               Submit
           </button>
           </div>
-
+          </form>
 
 
           {error && <p className="text-danger mt-3">Error: {error}</p>}
