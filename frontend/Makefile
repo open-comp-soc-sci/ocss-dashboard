@@ -9,6 +9,7 @@ run: check stop build
 build:
 	docker build -t frontend .
 
+
 stop down:
 	-docker stop frontend_container 
 	-docker rm frontend_container
