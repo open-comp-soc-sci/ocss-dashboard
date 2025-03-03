@@ -7,7 +7,6 @@ function Data() {
   const [error, setError] = useState(null);
 
   const handleSubmit = async (e) => {
-    //temporary fix, seems to keep refreshing to the index page /
     e.preventDefault();
 
     try {
@@ -53,40 +52,115 @@ function Data() {
   }, [email]);
 
   return (
-    <div className="container mt-5">
+    <div
+      className="container mt-5"
+
+    >
+      {/* Page Header */}
       <div className="text-center">
         <h1>Data Page</h1>
         <p>This is where the searches and results will be displayed. (Search History Also?)</p>
       </div>
 
-      <div>
-        <h1>OCSS Search</h1>
-        <p>(Query should include parameter options from wireframe)</p>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Enter your search here"
-          />
-          <button type="submit">Submit</button>
-        </form>
-        {error && <p>Error: {error}</p>}
+      <div className="row mt-4">
+        <div className="col-md-4">
+          <h2>Subreddit Search</h2>
+          <p>(Query should include parameter options from wireframe)</p>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <input
+                type="text"
+                className="form-control"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Enter your search here"
+              />
+            </div>
+          </form>
+
+          <div className="mt-4">
+          <h2>Sentiment Keywords</h2>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <input
+                type="text"
+                className="form-control"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Enter your search here"
+              />
+            </div>
+          </form>
+          </div>
+          
+          <div className="mt-4">
+          <h2>Dates</h2>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <input
+                type="text"
+                className="form-control"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Enter your search here"
+              />
+            </div>
+          </form>
+          </div>
+
+          <div className="mt-4">
+          <button type="submit" className="btn btn-primary mt-2">
+              Submit
+          </button>
+          </div>
+
+
+
+          {error && <p className="text-danger mt-3">Error: {error}</p>}
+
+          {/* Search History */}
+        </div>
+
+        {/* Timeline*/}
+        <div className="col-md-8">
+          <h2>Sentiment Analysis</h2>
+          <p>Posts containing value (PLACEHOLDER DATE RANGE)</p>
+
+          {/* Chart */}
+          <div
+            style={{
+              backgroundColor: '#333',
+              height: '350px',
+              borderRadius: '8px',
+              marginBottom: '1rem'
+            }}
+          >
+            {/* PUT CHART HERE*/}
+          </div>
+
+          <button className="btn btn-secondary">Save as PNG</button>
+        </div>
       </div>
 
-      <br />
-      <h1>Search History</h1>
-      {error && <p>Error: {error}</p>}
-      <ul>
-        {searchData.map((item, index) => (
-          <li key={index}>
-            <strong>Search:</strong> {item.search_query}
-            <br />
-            <strong>Date:</strong> {item.created_utc}
-          </li>
-        ))}
-      </ul>
+
+      <div className="mt-5">
+            <h2>Search History</h2>
+            {searchData.length === 0 ? (
+              <p>Error: Failed to Fetch</p>
+            ) : (
+              <ul>
+                {searchData.map((item, index) => (
+                  <li key={index} style={{ marginBottom: '1rem' }}>
+                    <strong>Search:</strong> {item.search_query}
+                    <br />
+                    <strong>Date:</strong> {item.created_utc}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
     </div>
+    
   );
 }
 
