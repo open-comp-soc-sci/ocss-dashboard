@@ -9,6 +9,15 @@ terms = ["mvd", "nerve pain", "opioids", "pregabalin",
 
 df = df.fillna("")
 
-# extract body strings that contain at least one of the predefined terms
-filtered_bodies = [body for body in df["body"] if any(term in body.lower() for term in terms)]
+# Initialize a dictionary where each term maps to an empty list
+term_bodies = {term: [] for term in terms}
 
+# Iterate through each body in the DataFrame
+for body in df["body"]:
+    lower_body = body.lower()
+    for term in terms:
+        if term in lower_body:
+            term_bodies[term].append(body)
+
+# Convert dictionary values to a list of lists
+sectioned_bodies = [term_bodies[term] for term in terms]
