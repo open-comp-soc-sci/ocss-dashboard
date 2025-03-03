@@ -7,8 +7,6 @@ function Data() {
   const [searchData, setSearchData] = useState([]);
   const [subreddit, setSubreddit] = useState('');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
-
-  const [dates, setDates] = useState('');
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
 
@@ -17,55 +15,21 @@ function Data() {
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
 
+  const fetchSearchHistory = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/add_search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          subreddit: `r/${subreddit}`,
-          sentimentKeywords: sentimentKeywords,
-          startDate: startDate, 
-          endDate: endDate,
-          dateText: dates,
-          searchTerms: searchTerms,
-          email: email,
-        }),
-      });
+      const response = await fetch(`http://localhost:5000/api/get_search/${encodeURIComponent(email)}`);
 
       if (!response.ok) {
-        throw new Error('Frontend Post to Backend Failed');
+        throw new Error('Backend Fetch to Frontend Failed');
       }
 
       const data = await response.json();
-      console.log('Search Query:', data);
+      setSearchData(data.search_history || []);
     } catch (error) {
       setError(error.message);
     }
   };
-
-  useEffect(() => {
-    const fetchSearchHistory = async () => {
-      try {
-        const response = await fetch(`http://localhost:5000/api/get_search/${encodeURIComponent(email)}`);
-
-        if (!response.ok) {
-          throw new Error('Backend Fetch to Frontend Failed');
-        }
-
-        const data = await response.json();
-        setSearchData(data.search_history || []);
-      } catch (error) {
-        setError(error.message);
-      }
-    };
-
-    fetchSearchHistory();
-  }, [email]);
 
   const handleKeywordKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -80,6 +44,49 @@ function Data() {
 
   const removeTerm = (term) => {
     setSearchTerms(searchTerms.filter((t) => t !== term));
+  };
+
+  useEffect(() => {
+    if (email) {
+      fetchSearchHistory();
+    }
+  }, [email]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const response = await fetch('http://localhost:5000/api/add_search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subreddit: `r/${subreddit}`,
+          sentimentKeywords: sentimentKeywords,
+          startDate: startDate,
+          endDate: endDate,
+          //sorry for commenting out, i am unsure of when this is used
+          //dateText: dates,
+          searchTerms: searchTerms,
+          email: email,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Frontend Post to Backend Failed');
+      }
+
+      const data = await response.json();
+      console.log('Search Query:', data);
+
+      fetchSearchHistory();
+      setSubreddit('');
+      setSentimentKeywords('');
+      setSearchTerms([]);
+    } catch (error) {
+      setError(error.message);
+    }
   };
 
   return (
@@ -98,9 +105,9 @@ function Data() {
           <h2>Subreddit Search</h2>
           <p>(Query should include parameter options from wireframe)</p>
           <form onSubmit={handleSubmit}>
-          <div className="form-group">
+            <div className="form-group">
               <label>Subreddit</label>
-              <div className="input-group">            
+              <div className="input-group">
                 <span className="input-group-text text-muted">r/</span>
                 <input
                   type="text"
@@ -112,14 +119,15 @@ function Data() {
               </div>
             </div>
 
-          <div className="mt-4">
-          <h2>Sentiment Keywords</h2>
-          <div className="form-group">
+            <div className="mt-4">
+              <h2>Sentiment Keywords</h2>
+              <div className="form-group">
                 <label>Type a keyword and press Enter</label>
                 <input
                   type="text"
                   className="form-control"
                   onKeyDown={handleKeywordKeyDown}
+                  onChange={(e) => setSentimentKeywords(e.target.value)}
                   placeholder="e.g. happy"
                 />
               </div>
@@ -137,9 +145,9 @@ function Data() {
                 ))}
               </div>
             </div>
-          
-          <div className="mt-4">
-          <h2>Dates</h2>
+
+            <div className="mt-4">
+              <h2>Dates</h2>
               <div className="mt-3">
                 <label>Select Start Date:        </label>
                 <ReactDatePicker
@@ -167,11 +175,11 @@ function Data() {
               </div>
             </div>
 
-          <div className="mt-4">
-          <button type="submit" className="btn btn-primary mt-2">
-              Submit
-          </button>
-          </div>
+            <div className="mt-4">
+              <button type="submit" className="btn btn-primary mt-2">
+                Submit
+              </button>
+            </div>
           </form>
 
 
@@ -203,23 +211,27 @@ function Data() {
 
 
       <div className="mt-5">
-            <h2>Search History</h2>
-            {searchData.length === 0 ? (
-              <p>Error: Failed to Fetch</p>
-            ) : (
-              <ul>
-                {searchData.map((item, index) => (
-                  <li key={index} style={{ marginBottom: '1rem' }}>
-                    <strong>Search:</strong> {item.search_query}
-                    <br />
-                    <strong>Date:</strong> {item.created_utc}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        <h2>Search History</h2>
+        {searchData.length === 0 ? (
+          <p>Error: Failed to Fetch</p>
+        ) : (
+          <ul>
+            {searchData.map((item, index) => (
+              <li key={index} style={{ marginBottom: '1rem' }}>
+                <strong>Reddit:</strong> {item.subreddit}
+                <br />
+                <strong>Terms:</strong> {item.sentimentKeywords}
+                <br />
+                <strong>Time Range:</strong> {new Date(item.startDate).toLocaleDateString('en-US')} - {new Date(item.endDate).toLocaleDateString('en-US')}
+                <br />
+                <strong>Date:</strong> {item.created_utc}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
-    
+
   );
 }
 
