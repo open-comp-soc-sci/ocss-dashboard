@@ -1,4 +1,4 @@
-run: stop build
+run: check stop build
 	docker run --name frontend_container \
 	-d -p 8001:8001 \
 	-v ${CURDIR}:/app \
@@ -13,3 +13,9 @@ build:
 stop down:
 	-docker stop frontend_container 
 	-docker rm frontend_container
+
+check:
+	@if [ ! -f .env ]; then \
+		echo ".env file does not exist. Please create it before running make and review the readme on how to set up the .env"; \
+		exit 1; \
+	fi
