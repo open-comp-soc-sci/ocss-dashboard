@@ -4,3 +4,4 @@ flask_login
 SQLAlchemy
 psycopg2-binary
 python-dotenv
+Flask-CORS
