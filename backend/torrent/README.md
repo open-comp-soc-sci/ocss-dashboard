@@ -14,10 +14,17 @@ $ du -sh RC_2024-01.zst
 $ du -sh RC_2024-01
 523G    RC_2024-01
 
+$ du -sh db_data # put into clickhouse
+19G
+36G
+54G
+72G
+90G
+
 steps:
 
 ```bash
-
+clickhouse-client --host 127.0.0.1 --port 9000 --user default --password heyheyhey --database default
 
 ```
 
