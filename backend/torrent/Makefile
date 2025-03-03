@@ -1,18 +1,75 @@
-testing:
-	docker build -t torrent-downloader .
-	docker run --rm -v "${CURDIR}/downloads:/downloads" torrent-downloader
+# Makefile
 
+IMAGE_NAME = clickhouse/clickhouse-server:latest
+CONTAINER_NAME = clickhouse_server_auto
 
+# Directory containing JSONL files to ingest (if you want to mount them)
+LOCAL_DIR = ~/ocss/reddit/comments
+CONTAINER_DIR = /data/jsonl
 
-hi: stop
-	docker build -t torrent-downloader .
-	docker run --rm \
-	  -e MAGNET_LINK="magnet:?xt=urn:btih:56aa49f9653ba545f48df2e33679f014d2829c10" \
-  		-e SELECT_FILE=2 \
-  		-v "${CURDIR}/downloads:/app/downloads" \
-	torrent-downloader
+# Directory on your host to store ClickHouse data
+# so the database persists across container restarts
+LOCAL_DB_DIR = ~/ocss/reddit/db_data
+CONTAINER_DB_DIR = /var/lib/clickhouse
 
+.PHONY: run stop logs
+
+## Run the official ClickHouse container with persistent storage
+run: stop
+	docker run -d --name $(CONTAINER_NAME) \
+		-p 9003:9000 \
+		-p 8123:8123 \
+		-e CLICKHOUSE_USER=default \
+		-e CLICKHOUSE_PASSWORD=heyheyhey \
+		-v $(LOCAL_DB_DIR):$(CONTAINER_DB_DIR) \
+		-v $(LOCAL_DIR):$(CONTAINER_DIR) \
+		$(IMAGE_NAME)
+
+## Stop and remove the container if it exists
 stop down:
-	@CONTAINERS=$$(docker ps -q -f ancestor=torrent-downloader)
-	-docker stop $$CONTAINERS
-	-docker rm $$CONTAINERS
+	docker stop $(CONTAINER_NAME) || true
+	docker rm $(CONTAINER_NAME) || true
+
+## View container logs
+logs:
+	docker logs -f $(CONTAINER_NAME)
+
+## Exec into the container with a bash shell
+bash:
+	docker exec -it $(CONTAINER_NAME) bash
+
+send:
+	# nohup python -u insert_data.py ~/ocss/reddit/comments/RC_2024-01 | tee output.log &
+	# nohup python -u insert_data.py ~/ocss/reddit/comments/RC_2024-02 | tee output.log &
+	# nohup python -u insert_data.py ~/ocss/reddit/comments/RC_2024-03 | tee output.log &
+
+	# python manager.py ~/ocss/reddit/comments/RC_2024-03 16
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-04 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-05.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-06.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-07.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-08.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-09.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-10.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-11.zst 16 | tee manager_output.log &
+	nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-12.zst 16 | tee manager_output.log &
+
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-01.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-02.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-03.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-04.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-05.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-06.zst 16 | tee manager_output.log &
+
+
+
+drop:
+	docker exec -it $(CONTAINER_NAME) \
+		clickhouse-client \
+		--user=default \
+		--password=heyheyhey \
+		--query="DROP TABLE IF EXISTS reddit_comments"
+
+# inside:
+# docker exec -it $(CONTAINER_NAME) /bin/bash
+#clickhouse-client --user=default --password=heyheyhey
