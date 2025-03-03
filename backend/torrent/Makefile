@@ -17,7 +17,7 @@ CONTAINER_DB_DIR = /var/lib/clickhouse
 ## Run the official ClickHouse container with persistent storage
 run: stop
 	docker run -d --name $(CONTAINER_NAME) \
-		-p 9000:9000 \
+		-p 9003:9000 \
 		-p 8123:8123 \
 		-e CLICKHOUSE_USER=default \
 		-e CLICKHOUSE_PASSWORD=heyheyhey \
@@ -39,7 +39,27 @@ bash:
 	docker exec -it $(CONTAINER_NAME) bash
 
 send:
-	nohup python -u insert_data.py ~/ocss/reddit/comments/RC_2024-01 | tee output.log &
+	# nohup python -u insert_data.py ~/ocss/reddit/comments/RC_2024-01 | tee output.log &
+	# nohup python -u insert_data.py ~/ocss/reddit/comments/RC_2024-02 | tee output.log &
+	# nohup python -u insert_data.py ~/ocss/reddit/comments/RC_2024-03 | tee output.log &
+
+	# python manager.py ~/ocss/reddit/comments/RC_2024-03 16
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-04 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-05.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-06.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-07.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-08.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-09.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-10.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-11.zst 16 | tee manager_output.log &
+	nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-12.zst 16 | tee manager_output.log &
+
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-01.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-02.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-03.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-04.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-05.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-06.zst 16 | tee manager_output.log &
 
 
 
