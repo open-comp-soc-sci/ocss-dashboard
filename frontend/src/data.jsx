@@ -2,59 +2,50 @@ import React, { useEffect, useState } from 'react';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
-
 function Data() {
   const [searchData, setSearchData] = useState([]);
   const [subreddit, setSubreddit] = useState('');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
-
   const [searchTerms, setSearchTerms] = useState([]);
-
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
-
+  const [clickData, setClickData] = useState([]);
 
   const fetchSearchHistory = async () => {
     try {
       const response = await fetch(`http://localhost:5000/api/get_search/${encodeURIComponent(email)}`);
 
       if (!response.ok) {
-        throw new Error('Backend Fetch to Frontend Failed');
+        throw new Error('Backend Fetch Failed');
       }
 
       const data = await response.json();
       setSearchData(data.search_history || []);
     } catch (error) {
+      if (error.message !== 'Backend Fetch Failed') {
+        setError(error.message);
+      }
+    }
+  };
+
+  const fetchClickData = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/get_click?subreddit=${encodeURIComponent(subreddit)}`);
+
+      if (!response.ok) {
+        throw new Error('ClickHouse fetch failed.');
+      }
+
+      const data = await response.json();
+      setClickData(data);
+    } catch (error) {
       setError(error.message);
     }
   };
 
-  const handleKeywordKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const newTerm = e.target.value.trim();
-      if (newTerm && !searchTerms.includes(newTerm)) {
-        setSearchTerms((prevTerms) => [...prevTerms, newTerm]);
-      }
-      e.target.value = '';
-    }
-  };
-
-  const removeTerm = (term) => {
-    setSearchTerms(searchTerms.filter((t) => t !== term));
-  };
-
-  useEffect(() => {
-    if (email) {
-      fetchSearchHistory();
-    }
-  }, [email]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const AddSearch = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/add_search', {
         method: 'POST',
@@ -81,12 +72,41 @@ function Data() {
       console.log('Search Query:', data);
 
       fetchSearchHistory();
-      setSubreddit('');
-      setSentimentKeywords('');
-      setSearchTerms([]);
     } catch (error) {
       setError(error.message);
     }
+  }
+
+  const handleKeywordKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const newTerm = e.target.value.trim();
+      if (newTerm && !searchTerms.includes(newTerm)) {
+        setSearchTerms((prevTerms) => [...prevTerms, newTerm]);
+      }
+      e.target.value = '';
+    }
+  };
+
+  const removeTerm = (term) => {
+    setSearchTerms(searchTerms.filter((t) => t !== term));
+  };
+
+  useEffect(() => {
+    if (email) {
+      fetchSearchHistory();
+    }
+  }, [email]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    setError(null);
+    await fetchClickData();
+    await AddSearch();
+    setSubreddit('');
+    setSentimentKeywords('');
+    setSearchTerms([]);
   };
 
   return (
@@ -123,10 +143,12 @@ function Data() {
               <h2>Sentiment Keywords</h2>
               <div className="form-group">
                 <label>Type a keyword and press Enter</label>
+                {/* Temporarily added value={sentimentKeywords} just to clear on search until dropdown list. */}
                 <input
                   type="text"
                   className="form-control"
                   onKeyDown={handleKeywordKeyDown}
+                  value={sentimentKeywords}
                   onChange={(e) => setSentimentKeywords(e.target.value)}
                   placeholder="e.g. happy"
                 />
@@ -174,18 +196,13 @@ function Data() {
                 />
               </div>
             </div>
-
             <div className="mt-4">
               <button type="submit" className="btn btn-primary mt-2">
                 Submit
               </button>
             </div>
           </form>
-
-
           {error && <p className="text-danger mt-3">Error: {error}</p>}
-
-          {/* Search History */}
         </div>
 
         {/* Timeline*/}
@@ -209,11 +226,29 @@ function Data() {
         </div>
       </div>
 
+      <div className="mt-5">
+        <h2>ClickHouse Data Test</h2>
+        {searchData.length === 0 ? (
+          <p>----------</p>
+        ) : (
+          <ul>
+            {clickData.map((item, index) => (
+              <li key={index} style={{ marginBottom: '1rem' }}>
+                <strong>Subreddit: </strong> r/{item[0]}
+                <br />
+                <strong>Title: </strong> {item[1]}
+                <br />
+                <strong>Body: </strong> {item[2]}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="mt-5">
         <h2>Search History</h2>
         {searchData.length === 0 ? (
-          <p>Error: Failed to Fetch</p>
+          <p>No search history.</p>
         ) : (
           <ul>
             {searchData.map((item, index) => (
