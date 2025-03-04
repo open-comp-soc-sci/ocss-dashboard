@@ -16,7 +16,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      #if db local
       - db_users:/var/lib/postgresql/data
   adminer:
     image: adminer
