@@ -3,12 +3,13 @@ hello: down
 		echo ".env file not found. Please create one." >&2; \
 		exit 1; \
 	fi
+	docker compose build
 	docker compose up --detach
 	make logs
 
 
 down:
-	docker compose down
+	docker compose down -v
 
 logs:
 	docker compose logs -f
