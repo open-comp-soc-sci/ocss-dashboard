@@ -15,7 +15,7 @@ function Data() {
 
   const fetchSearchHistory = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/get_search/${encodeURIComponent(email)}`);
+      const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
 
       if (!response.ok) {
         throw new Error('Backend Fetch Failed');
@@ -32,7 +32,7 @@ function Data() {
 
   const fetchClickData = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/get_click?subreddit=${encodeURIComponent(subreddit)}`);
+      const response = await fetch(`/api/get_click?subreddit=${encodeURIComponent(subreddit)}`);
 
       if (!response.ok) {
         throw new Error('ClickHouse fetch failed.');
@@ -47,7 +47,7 @@ function Data() {
 
   const AddSearch = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/add_search', {
+      const response = await fetch('/api/add_search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
