@@ -51,8 +51,22 @@ def getSearch(email):
 
 @searchHistory_BP.route("/api/remove_search/<int:search_id>", methods=['DELETE'])
 def removeSearch(search_id):
-    return 404
+    search = SearchHistory.query.get(search_id)
+    if search:
+        db.session.delete(search)
+        db.session.commit()
+        return jsonify({"message": "Search removed."}), 200
+    else:
+        return jsonify({"message": "Search remove failed."}), 404
 
 @searchHistory_BP.route("/api/clear_all/<string:email>", methods=["DELETE"])
 def clearAll(email):
-    return 404
+    search_data = SearchHistory.query.filter_by(email=email).all()
+
+    if search_data:
+        for search in search_data:
+            db.session.delete(search)
+        db.session.commit()
+        return jsonify({"message": "Searches cleared."}), 200
+    else:
+        return jsonify({"message": "Search clear failed."}), 404
