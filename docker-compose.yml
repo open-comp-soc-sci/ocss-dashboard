@@ -4,6 +4,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    depends_on:
+      - db
     ports:
       - "5000:5000"
     volumes:
@@ -13,7 +15,8 @@ services:
     environment:
       FLASK_DEBUG: 1
       FLASK_SQLALCHEMY_DATABASE_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
-    command: flask run -h 0.0.0.0
+    command: ["./wait-for-db.sh", "db", "sh", "-c", "python create_tables.py && flask run -h 0.0.0.0"]
+
 
   frontend:
     build:
