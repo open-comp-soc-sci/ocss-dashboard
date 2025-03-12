@@ -12,6 +12,8 @@ function Data() {
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
   const [clickData, setClickData] = useState([]);
+  const [option, setOption] = useState("reddit_submissions");
+  const [selectedOption, setSelectedOption] = useState("reddit_submissions");
 
   const fetchSearchHistory = async () => {
     try {
@@ -32,7 +34,7 @@ function Data() {
 
   const fetchClickData = async () => {
     try {
-      const response = await fetch(`/api/get_click?subreddit=${encodeURIComponent(subreddit)}`);
+      const response = await fetch(`/api/get_click?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}`);
 
       if (!response.ok) {
         throw new Error('ClickHouse fetch failed.');
@@ -101,12 +103,10 @@ function Data() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    setOption(selectedOption);
     setError(null);
     await fetchClickData();
     await AddSearch();
-    setSubreddit('');
-    setSentimentKeywords('');
-    setSearchTerms([]);
   };
 
   return (
@@ -197,6 +197,38 @@ function Data() {
               </div>
             </div>
             <div className="mt-4">
+              <h2>Search Options</h2>
+              <div className="form-group">
+                <label>Choose to view Reddit submissions or comments.</label>
+                <div>
+                  <label className="form-check-label">
+                    <input
+                      type="radio"
+                      className="form-check-input"
+                      name="option"
+                      value="reddit_submissions"
+                      checked={selectedOption === "reddit_submissions"}
+                      onChange={() => setSelectedOption("reddit_submissions")}
+                    />
+                    Submissions
+                  </label>
+                </div>
+                <div>
+                  <label className="form-check-label">
+                    <input
+                      type="radio"
+                      className="form-check-input"
+                      name="option"
+                      value="reddit_comments"
+                      checked={selectedOption === "reddit_comments"}
+                      onChange={() => setSelectedOption("reddit_comments")}
+                    />
+                    Comments
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
               <button type="submit" className="btn btn-primary mt-2">
                 Submit
               </button>
@@ -227,23 +259,57 @@ function Data() {
       </div>
 
       <div className="mt-5">
-        <h2>ClickHouse Data Test</h2>
+        <h2>ClickHouse Data Print Test</h2>
         {searchData.length === 0 ? (
           <p>----------</p>
         ) : (
           <ul>
             {clickData.map((item, index) => (
               <li key={index} style={{ marginBottom: '1rem' }}>
-                <strong>Subreddit: </strong> r/{item[0]}
-                <br />
-                <strong>Title: </strong> {item[1]}
-                <br />
-                <strong>Body: </strong> {item[2]}
+                {option === "reddit_submissions" ? (
+                  <>
+                    <strong>Subreddit: </strong> r/{item[1]}
+                    <br />
+                    <strong>Title: </strong> {item[2]}
+                    <br />
+                    <strong>Body: </strong> {item[3]}
+                    <br />
+                    <strong>Link: </strong>
+                    <a
+                      href={`https://reddit.com/r/${item[1]}/comments/${item[0]}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      reddit.com/r/{item[1]}/comments/{item[0]}
+                    </a>
+                    <br />
+                    <strong>Created_UTC: </strong> {item[4]}
+                    <br />
+                  </>
+                ) : (
+                  <>
+                    <strong>Subreddit: </strong> r/{item[2]}
+                    <br />
+                    <strong>Comment: </strong> {item[3]}
+                    <br />
+                    <strong>Link: </strong>
+                    <a
+                      href={`https://reddit.com/r/${item[2]}/comments/${item[1]}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      reddit.com/r/{item[2]}/comments/{item[1]}
+                    </a>
+                    <br />
+                    <strong>Created_UTC: </strong> {item[4]}
+                  </>
+                )}
               </li>
             ))}
           </ul>
         )}
       </div>
+
 
       <div className="mt-5">
         <h2>Search History</h2>
