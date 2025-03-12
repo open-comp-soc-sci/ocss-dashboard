@@ -12,12 +12,11 @@ class SearchHistory(db.Model):
     __tablename__ = 'searchHistory'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     email = db.Column(db.String(), nullable=False)
-    subreddit = db.Column(db.String(200), nullable=False)
-    sentimentKeywords = db.Column(db.String(200), nullable=False)
-    startDate = db.Column(db.Date, nullable=True)
-    endDate = db.Column(db.Date, nullable=True)
+    subreddit = db.Column(db.String(), nullable=False)
+    sentimentKeywords = db.Column(db.String(), nullable=False)
+    startDate = db.Column(db.Date, nullable=False)
+    endDate = db.Column(db.Date, nullable=False)
     created_utc = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
-    #user = db.relationship('Users', backref=db.backref('search_histories', lazy=True))
     
 # unimplemented RedditData model class. 
 class RedditData(Base):
