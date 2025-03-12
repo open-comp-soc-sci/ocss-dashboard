@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
-
-#import pika
+import pika
 import json
 import os
 import re
@@ -41,7 +40,7 @@ OLLAMA_IP = os.getenv("OLLAMA_IP_ADDRESS", "http://maltlab.cise.ufl.edu:11434") 
 
 config = {
 
-    'data' : "../../pullData/scrapedData/askscience_full_db.pickle",
+    'data' : "full_db.pickle",
 
     'embeddings' : {
         'name' : 'BAAI/bge-base-en-v1.5',
@@ -363,7 +362,7 @@ class TopicModeling():
 
     def send_groups(self):
         # Connect to RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq", port=5672))
         channel = connection.channel()
 
         # Declare a queue (it must be declared in both producer & consumer)
@@ -372,10 +371,10 @@ class TopicModeling():
         """
         Sends clustering results to RabbitMQ.
         """
-        message = json.dumps(groups)
+        message = json.dumps(groups.tolist())
         channel.basic_publish(
             exchange="",
-            routing_key="clustering_results",
+            routing_key="grouping_results",
             body=message,
             properties=pika.BasicProperties(
                 delivery_mode=2,  # Makes message persistent
