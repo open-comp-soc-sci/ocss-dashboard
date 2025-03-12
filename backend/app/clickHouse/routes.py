@@ -17,11 +17,17 @@ client = get_client(
 @clickHouse_BP.route("/api/get_click", methods=["GET"])
 def get_click():
     subreddit = request.args.get('subreddit', None)
+    option = request.args.get('option', 'reddit_submissions')
 
+    #remove limit when datatables is ready for all data
+    #date range is 2024
     try:
-        query = f"SELECT subreddit, title, selftext FROM reddit_submissions WHERE subreddit = '{subreddit}' LIMIT 10;"
-        result = client.query(query)
+        if option == "reddit_submissions":
+            query = f"SELECT id, subreddit, title, selftext, created_utc FROM reddit_submissions WHERE subreddit = '{subreddit}' LIMIT 10;"
+        elif option == "reddit_comments":
+            query = f"SELECT id, parent_id, subreddit, body, created_utc FROM reddit_comments WHERE subreddit = '{subreddit}' LIMIT 10;"
 
+        result = client.query(query)
         data = result.result_rows
         return jsonify(data)
     
