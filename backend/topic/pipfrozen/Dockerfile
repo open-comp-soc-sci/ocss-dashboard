@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the topic modeling script
 COPY topic_model.py /app/
-COPY askscience_full_db.pickle /app/
+COPY full_db.pickle /app/
 
 # Set the default command
 CMD ["python3", "topic_model.py"]
