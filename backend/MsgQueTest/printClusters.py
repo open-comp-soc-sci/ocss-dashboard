@@ -5,11 +5,10 @@ import numpy as np
 class ClusterPrintingTest:
     def __init__(self):
         # Connect to RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq", port=5672))
         channel = connection.channel()
         # Declare the same queue
         channel.queue_declare(queue="grouping_results", durable=True)
-        receive_groups()
         channel.basic_consume(queue="grouping_results", on_message_callback=self.receive_groups)
 
         print(" [*] Waiting for messages. To exit, press CTRL+C")
@@ -18,10 +17,7 @@ class ClusterPrintingTest:
         connection.close()
 
     def receive_groups(self, ch, method, properties, body):
-        # Connect to RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
-        channel = connection.channel()
-        self.groups =  json.loads(body)
+        self.groups =  np.array(json.loads(body))
         print("Received Data")
 
         # Simulate processing each cluster
@@ -32,4 +28,8 @@ class ClusterPrintingTest:
 
         # Acknowledge message after processing
         ch.basic_ack(delivery_tag=method.delivery_tag)
+        # Only receive one message
+        ch.stop_consuming()
         
+if __name__ == '__main__':
+    clusterPrinter = ClusterPrintingTest()
