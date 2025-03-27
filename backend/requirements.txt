@@ -1,7 +1,9 @@
 flask
 flask_sqlalchemy
-flask_login
 SQLAlchemy
 psycopg2-binary
 python-dotenv
 Flask-CORS
+clickhouse-connect
+pika
+rabbitmq
