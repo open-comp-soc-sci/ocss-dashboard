@@ -16,12 +16,33 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      #if db local
       - db_users:/var/lib/postgresql/data
   adminer:
     image: adminer
     ports:
       - 8080:8080
+  
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"    # RabbitMQ message queue port
+      - "15672:15672"  # RabbitMQ web UI
+    restart: always
+
+  model1:
+    build: ./model1
+    container_name: model1
+    depends_on:
+      - rabbitmq
+    restart: "no"  # Only runs once to send data
+
+  model2:
+    build: ./model2
+    container_name: model2
+    depends_on:
+      - rabbitmq
+    restart: always
 volumes:
   db_users:
 
