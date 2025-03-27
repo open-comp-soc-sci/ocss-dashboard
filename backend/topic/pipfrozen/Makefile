@@ -18,10 +18,11 @@ build:
 
 run:
 	docker run -d \
+	--network=mynetwork \
 	--gpus all \
 	--name topicmodelfrozen_container \
 	-v ~/.cache/huggingface:/root/.cache/huggingface \
-	-v ${PWD}:/app \
+	-v ${CURDIR}:/app \
 	-e OLLAMA_IP_ADDRESS=$(IP_ADDRESS) \
 	topicmodelfrozen python3 topic_model.py /app/full_db.pickle /app/output/
 

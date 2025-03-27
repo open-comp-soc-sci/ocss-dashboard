@@ -52,7 +52,7 @@ send:
 	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-09.zst 16 | tee manager_output.log &
 	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-10.zst 16 | tee manager_output.log &
 	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-11.zst 16 | tee manager_output.log &
-	nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-12.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/comments/RC_2024-12.zst 16 | tee manager_output.log &
 
 	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-01.zst 16 | tee manager_output.log &
 	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-02.zst 16 | tee manager_output.log &
@@ -60,6 +60,12 @@ send:
 	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-04.zst 16 | tee manager_output.log &
 	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-05.zst 16 | tee manager_output.log &
 	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-06.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-07.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-08.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-09.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-10.zst 16 | tee manager_output.log &
+	# nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-11.zst 16 | tee manager_output.log &
+	nohup python -u manager.py ~/ocss/reddit/submissions/RS_2024-12.zst 16 | tee manager_output.log &
 
 
 
@@ -69,6 +75,14 @@ drop:
 		--user=default \
 		--password=heyheyhey \
 		--query="DROP TABLE IF EXISTS reddit_comments"
+
+selective-drop:
+	docker exec -it $(CONTAINER_NAME) \
+		clickhouse-client \
+		--user=default \
+		--password=heyheyhey \
+		--query="ALTER TABLE reddit_comments DELETE WHERE file_name LIKE 'RC_2024-12%';"
+
 
 # inside:
 # docker exec -it $(CONTAINER_NAME) /bin/bash
