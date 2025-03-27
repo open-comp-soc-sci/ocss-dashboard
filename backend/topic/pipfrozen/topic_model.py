@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-
+import pika
 import json
 import os
 import re
@@ -40,7 +40,7 @@ OLLAMA_IP = os.getenv("OLLAMA_IP_ADDRESS", "http://localhost:11434")  # Default 
 
 config = {
 
-    'data' : None,
+    'data' : "full_db.pickle",
 
     'embeddings' : {
         'name' : 'BAAI/bge-base-en-v1.5',
@@ -96,6 +96,7 @@ class TopicModeling():
         self.label_topics()
         self.find_groups()
         self.label_groups()
+        self.send_groups()
         self.plot_topics()
         self.create_topic_table()
 
@@ -359,6 +360,28 @@ class TopicModeling():
         # Load a saved topic model.
         raise NotImplementedError
 
+    def send_groups(self):
+        # Connect to RabbitMQ
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq", port=5672))
+        channel = connection.channel()
+
+        # Declare a queue (it must be declared in both producer & consumer)
+        channel.queue_declare(queue="grouping_results", durable=True)
+        groups = self.groups
+        """
+        Sends clustering results to RabbitMQ.
+        """
+        message = json.dumps(groups.tolist())
+        channel.basic_publish(
+            exchange="",
+            routing_key="grouping_results",
+            body=message,
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # Makes message persistent
+            )
+        )
+        print(f" [x] Sent {message}")
+        connection.close()
 
 class TopicLabeling():
 
