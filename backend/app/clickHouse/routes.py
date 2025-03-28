@@ -2,7 +2,11 @@ from flask import Blueprint, jsonify, request
 from clickhouse_connect import get_client
 from dotenv import load_dotenv
 import os
+import json
+import pika
 from . import clickHouse_BP
+from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
+
 
 load_dotenv()
 client = get_client(
@@ -19,13 +23,19 @@ def get_click():
     subreddit = request.args.get('subreddit', None)
     option = request.args.get('option', 'reddit_submissions')
 
-    #remove limit when datatables is ready for all data
-    #date range is 2024
     try:
         if option == "reddit_submissions":
-            query = f"SELECT id, subreddit, title, selftext, created_utc FROM reddit_submissions WHERE subreddit = '{subreddit}' LIMIT 10;"
+            query = (
+                f"SELECT id, subreddit, title, selftext, created_utc "
+                f"FROM reddit_submissions WHERE subreddit = '{subreddit}' LIMIT 10;"
+            )
         elif option == "reddit_comments":
-            query = f"SELECT id, parent_id, subreddit, body, created_utc FROM reddit_comments WHERE subreddit = '{subreddit}' LIMIT 10;"
+            query = (
+                f"SELECT id, parent_id, subreddit, body, created_utc "
+                f"FROM reddit_comments WHERE subreddit = '{subreddit}' LIMIT 10;"
+            )
+        else:
+            return jsonify({"error": "Invalid option provided."}), 400
 
         result = client.query(query)
         data = result.result_rows
@@ -66,4 +76,21 @@ def get_all_click():
         return jsonify({"error": str(e)}), 500
 
 
-    
+
+@clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
+def run_sentiment():
+    try:
+        # Retrieve parameters from the POST body.
+        request_data = request.get_json() or {}
+        parameters = {
+            "subreddit": request_data.get("subreddit", ""),
+            "option": request_data.get("option", "reddit_submissions")
+            # Add any additional parameters as needed.
+        }
+        message = json.dumps(parameters)
+        rpc_client = TopicModelRpcClient()
+        result = rpc_client.call(message)
+        return jsonify({"result": json.loads(result)}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

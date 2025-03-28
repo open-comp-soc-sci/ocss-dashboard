@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - db
+      - rabbitmq
     ports:
       - "5000:5000"
     volumes:
@@ -16,7 +17,6 @@ services:
       FLASK_DEBUG: 1
       FLASK_SQLALCHEMY_DATABASE_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
     command: ["./wait-for-db.sh", "db", "sh", "-c", "python create_tables.py && flask run -h 0.0.0.0"]
-
 
   frontend:
     build:
@@ -41,6 +41,15 @@ services:
     image: adminer
     ports:
       - "8089:8080"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    ports:
+      - "5672:5672"   # AMQP connection port
+      - "15672:15672" # Management interface port
 
 volumes:
   db_users:
