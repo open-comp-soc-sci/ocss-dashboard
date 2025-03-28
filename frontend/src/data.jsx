@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import $ from 'jquery';
+import 'datatables.net';
 
 function Data() {
   const [searchData, setSearchData] = useState([]);
@@ -14,6 +16,7 @@ function Data() {
   const [clickData, setClickData] = useState([]);
   const [option, setOption] = useState("reddit_submissions");
   const [selectedOption, setSelectedOption] = useState("reddit_submissions");
+  const [allClickData, setAllClickData] = useState([]);
 
   const fetchSearchHistory = async () => {
     try {
@@ -99,6 +102,99 @@ function Data() {
       fetchSearchHistory();
     }
   }, [email]);
+
+  useEffect(() => {
+    const fetchData = async (start, length, draw) => {
+      try {
+        //start = start || 0;
+        //length = length || 10;
+        //draw = draw || 1;
+        console.log(`Fetching data with start=${start}, length=${length}, draw=${draw}`);
+        const response = await fetch(`/api/get_all_click?length=${length}&start=${start}&draw=${draw}`);
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+
+    const initDataTable = () => {
+      $("#click-table").DataTable({
+        processing: true,
+        serverSide: true,
+        paging: true,
+        ajax: function (data, callback, settings) {
+          const { start = 0, length = 10, draw = 1 } = settings;
+
+          console.log("start:", start, "length:", length, "draw:", draw);
+
+          fetchData(start, length, draw).then((apiData) => {
+            if (apiData && Array.isArray(apiData.data)) {
+              callback({
+                draw: apiData.draw,
+                recordsTotal: apiData.recordsTotal,
+                recordsFiltered: apiData.recordsFiltered,
+                data: apiData.data.map((row) => ({
+                  subreddit: row[0],
+                  title: row[1],
+                  selftext: row[2],
+                  created_utc: row[3],
+                })),
+              });
+            } else {
+              console.error("API data is not in expected format:", apiData);
+              callback({
+                draw: apiData.draw,
+                recordsTotal: 0,
+                recordsFiltered: 0,
+                data: [],
+              });
+            }
+          }).catch((error) => {
+            console.error("Error fetching data:", error);
+            callback({
+              draw: 1,
+              recordsTotal: 0,
+              recordsFiltered: 0,
+              data: [],
+            });
+          });
+        },
+        columns: [
+          { data: "subreddit", title: "Subreddit" },
+          { data: "title", title: "Title" },
+          { data: "selftext", title: "Body" },
+          { data: "created_utc", title: "Created UTC" },
+        ],
+        pageLength: 10,
+        lengthChange: true, //hide page length selector until paging works
+        deferRender: true,
+        responsive: true,
+        scrollY: "400px",
+        scrollX: false,
+        scroller: true,
+        autoWidth: false,
+        dom: '<"top">rt<"bottom"p><"clear">', //hide search bar until implemented
+        columnDefs: [
+          {
+            targets: '_all',
+            createdCell: function (td, cellData, rowData, row, col) {
+              $(td).css('border-right', '1px solid #333');
+            }
+          }
+        ],
+
+      });
+    };
+
+    initDataTable();
+
+    return () => {
+      if ($.fn.dataTable.isDataTable("#click-table")) {
+        $("#click-table").DataTable().destroy();
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -256,6 +352,16 @@ function Data() {
 
           <button className="btn btn-secondary">Save as PNG</button>
         </div>
+      </div>
+
+      {/* DataTables */}
+      <div>
+        <table id="click-table" className="display">
+          <thead>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
       </div>
 
       <div className="mt-5">
