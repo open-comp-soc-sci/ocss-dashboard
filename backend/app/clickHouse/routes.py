@@ -9,7 +9,8 @@ from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
 
 
 load_dotenv()
-client = get_client(
+def get_new_client():
+    return get_client(
     host=os.getenv('CH_HOST'),
     port=os.getenv('CH_PORT'),
     database=os.getenv('CH_DATABASE'),
@@ -22,6 +23,7 @@ client = get_client(
 def get_click():
     subreddit = request.args.get('subreddit', None)
     option = request.args.get('option', 'reddit_submissions')
+    client = get_new_client()
 
     try:
         if option == "reddit_submissions":
@@ -47,18 +49,22 @@ def get_click():
 @clickHouse_BP.route("/api/get_all_click", methods=["GET"])
 def get_all_click():
     try:
-        length = int(request.args.get('length', 10))
-        start = int(request.args.get('start', 0))
-        draw = int(request.args.get('draw', 1))
-        #search_value = request.args.get('search[value]', '')
-        #do we want to search on this data table, yes
+        length = request.args.get('length', default=10, type=int)
+        start = request.args.get('start', default=0, type=int)
+        draw = request.args.get('draw', default=1, type=int)
+        client = get_new_client()
+        search_value = request.args.get('search[value]', '', type=str)
 
-        #add in link with id later
         query = f"""
-            SELECT subreddit, title, selftext, created_utc
+            SELECT subreddit, title, selftext, created_utc, id
             FROM reddit_submissions
-            LIMIT {length} OFFSET {start}
         """
+
+        if search_value:
+            query += f" WHERE subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%'"
+
+        query += f" LIMIT {length} OFFSET {start}"
+
         result = client.query(query)
         data = result.result_rows
         count_query = "SELECT COUNT(*) FROM reddit_submissions"
@@ -74,8 +80,6 @@ def get_all_click():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
