@@ -34,57 +34,54 @@ sns.set_context('talk')
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.sans-serif'] = "CMU Sans Serif"
 plt.rcParams['font.family'] = "sans-serif"
-plt.rcParams['mathtext.fontset'] = 'cm' 
+plt.rcParams['mathtext.fontset'] = 'cm'
 
-OLLAMA_IP = os.getenv("OLLAMA_IP_ADDRESS", "http://maltlab.cise.ufl.edu:11434")  # Default to localhost if not set
+OLLAMA_IP = os.getenv("OLLAMA_IP_ADDRESS", "http://maltlab.cise.ufl.edu:11434")  # Default if not set
 
+# Updated configuration
 config = {
-
-    'data' : "full_db.pickle",
-
-    'embeddings' : {
-        'name' : 'BAAI/bge-base-en-v1.5',
-        'device' : 'cuda'
-    },
-
-    'save_dir' : "saved",
-
-    'random_state' : 42,
+    # Set data_source to "api" to indicate that data should be fetched via HTTP
+    'data_source': 'api',
+    # For API queries, specify the subreddit and option (submissions or comments)
+    'subreddit': 'survivor',  # adjust as needed
+    'option': 'reddit_submissions',  # or "reddit_comments"
     
-    'topic_hdbscan_params' : {
-        'min_cluster_size' : 100,
-        'metric' : 'euclidean',
-        'cluster_selection_method' : 'eom',
-        'prediction_data' : True
+    'embeddings': {
+        'name': 'BAAI/bge-base-en-v1.5',
+        'device': 'cuda'
     },
-    
-    'topic_umap_params' : {
-        'n_neighbors' : 15,
-        'n_components' : 10,
-        'min_dist' : 0.0,
-        'metric' : 'cosine',
-        'random_state' : 42
+    'save_dir': "saved",
+    'random_state': 42,
+    'topic_hdbscan_params': {
+        'min_cluster_size': 100,
+        'metric': 'euclidean',
+        'cluster_selection_method': 'eom',
+        'prediction_data': True
     },
-
-    'group_umap_params' : {
-        'n_neighbors' : 2,
-        'n_components' : 3,
-        'min_dist' : 0.0,
-        'metric' : 'hellinger',
-        'spread' : 2,
-        'random_state' : 42
+    'topic_umap_params': {
+        'n_neighbors': 15,
+        'n_components': 10,
+        'min_dist': 0.0,
+        'metric': 'cosine',
+        'random_state': 42
     },
-
-    'ngram_representation' : {
-        'stop_words' : 'english'
+    'group_umap_params': {
+        'n_neighbors': 2,
+        'n_components': 3,
+        'min_dist': 0.0,
+        'metric': 'hellinger',
+        'spread': 2,
+        'random_state': 42
     },
-
-
+    'ngram_representation': {
+        'stop_words': 'english'
+    },
 }
 
 class TopicModeling():
     """
-    Class for handling BERTopic modeling as it pertains to Reddit. 
+    Class for handling BERTopic modeling for Reddit data.
+    Instead of reading a pickle file, it queries the ClickHouse API endpoint.
     """
 
     def __init__(self, config=config):
@@ -102,112 +99,104 @@ class TopicModeling():
 
     def load_data_frame(self):
         """
-        Load our Reddit post/comments dataframe.
+        Loads the Reddit posts/comments dataframe by querying the API.
+        The API endpoint is assumed to be available at http://app:5000/api/get_click.
         """
-        if self.config['data'].split('.')[-1] != 'pickle':
-            raise TypeError('Expected a pickle file file. Other input dataframe types not yet supported.')
+        # We now use the API rather than a static pickle file.
+        if self.config.get("data_source", "pickle") == "api":
+            # Build the API URL using the hostname "app" (accessible via Docker network)
+            subreddit = self.config.get("subreddit", "default_subreddit")
+            option = self.config.get("option", "reddit_submissions")
+            api_url = f"http://app:5000/api/get_click?subreddit={subreddit}&option={option}"
+            try:
+                response = requests.get(api_url)
+                response.raise_for_status()
+                data = response.json()
+            except Exception as e:
+                raise Exception(f"Error fetching data from API: {e}")
+            
+            # Convert the JSON data into a DataFrame based on the option.
+            if option == "reddit_submissions":
+                # Expected columns: id, subreddit, title, selftext, created_utc
+                df = pd.DataFrame(data, columns=["id", "subreddit", "title", "selftext", "created_utc"])
+                # Rename selftext to body to match downstream processing.
+                df = df.rename(columns={"selftext": "body"})
+            elif option == "reddit_comments":
+                # Expected columns: id, parent_id, subreddit, body, created_utc
+                df = pd.DataFrame(data, columns=["id", "parent_id", "subreddit", "body", "created_utc"])
+            else:
+                raise ValueError(f"Invalid option provided: {option}")
 
-        df = pd.read_pickle(self.config['data'])
-        self.df = self.preprocess_dataframe(df)
-        self.texts = self.df['body'].to_list()
+            self.df = self.preprocess_dataframe(df)
+            self.texts = self.df['body'].tolist()
+        else:
+            # Fallback if data_source is not "api". (Legacy support for pickle files.)
+            if self.config['data'].split('.')[-1] != 'pickle':
+                raise TypeError('Expected a pickle file. Other input types not yet supported.')
+            df = pd.read_pickle(self.config['data'])
+            self.df = self.preprocess_dataframe(df)
+            self.texts = self.df['body'].tolist()
 
     @staticmethod
     def preprocess_dataframe(df):
         """
-        Preprocess dataframe for topic modeling, if this has not already been performed.
+        Preprocess the dataframe for topic modeling.
         """
-        # Fill empty cells and remove some weird html tags
         df['body'].fillna("", inplace=True)
-        df['body'] = df['body'].str.replace("http\S+", "")
-        df['body'] = df['body'].str.replace("\\n", " ")
-        df['body'] = df['body'].str.replace("&gt;", "")
-        
-        # Get rid of extra spaces
-        df['body'] = df['body'].str.replace('\s+', ' ', regex=True)
-        
-        # Remove those too small.
+        df['body'] = df['body'].str.replace(r"http\S+", "", regex=True)
+        df['body'] = df['body'].str.replace(r"\\n", " ", regex=True)
+        df['body'] = df['body'].str.replace("&gt;", "", regex=False)
+        df['body'] = df['body'].str.replace(r'\s+', ' ', regex=True)
         df['body_len'] = df['body'].str.len()
         df = df.query('body_len >= 25')
         return df
 
     def find_topics(self):
-        # Load our vectorizer
         vectorizer_model = CountVectorizer(stop_words='english', ngram_range=(1, 2))
-        
-        # Create our embedding model and load the embeddings.
-        embedding_model = SentenceTransformer('BAAI/bge-base-en-v1.5', device='cuda')
-
+        embedding_model = SentenceTransformer(self.config['embeddings']['name'], device=self.config['embeddings']['device'])
         self.embeddings = embedding_model.encode(self.texts, show_progress_bar=True, batch_size=64)
-        
-        # Create our remaining other functions of importance.
         umap_model = UMAP(**self.config['topic_umap_params'])
         u = umap_model.fit_transform(self.embeddings)
-
-        # Create an initial guess of the number of clusters we will likely have and where they are located in the dim-red latent space
         hdbscan_model = HDBSCAN(**self.config['topic_hdbscan_params'])
         clusters = np.array(hdbscan_model.fit_predict(u))
-
-        # Find centroids of all the clusters.
         n_clusters = np.max(clusters) + 1
         centroids = np.empty((n_clusters, u.shape[1]))
-
         for cluster_i in range(n_clusters):
             inds_in_cluster_i = np.where(clusters == cluster_i)[0]
             points_in_cluster_i = u[inds_in_cluster_i]
             centroids[cluster_i, :] = np.mean(points_in_cluster_i, axis=0)
-
-        # Create our final clustering model
         kmeans_model = KMeans(n_clusters=n_clusters, random_state=42, init=centroids)
-        
-        # KeyBERT
         representation_model = KeyBERTInspired()
-
-        # Create our topic model with all of these pieces
         self.topic_model = BERTopic(vectorizer_model=vectorizer_model,
-                            embedding_model=embedding_model,
-                            umap_model=umap_model,
-                            hdbscan_model=kmeans_model,
-                            representation_model=representation_model,
-                            verbose=True)
-        
+                                    embedding_model=embedding_model,
+                                    umap_model=umap_model,
+                                    hdbscan_model=kmeans_model,
+                                    representation_model=representation_model,
+                                    verbose=True)
         self.topics, _ = self.topic_model.fit_transform(self.texts, self.embeddings)
-
-        # Save outputs.
-        # if not path exists, make it
         if not os.path.exists(self.config['save_dir']):
             os.makedirs(self.config['save_dir'])
-
-        # Save outputs.
         self.topic_model.save(f'{self.config["save_dir"]}/topic_model.pickle', save_ctfidf=True)
         with open(f'{self.config["save_dir"]}/topics.pickle', 'wb') as fh:
+            import pickle
             pickle.dump(self.topics, fh)
 
     def label_topics(self):
         self.topic_labeler = TopicLabeling(self.df, self.topics, self.embeddings, self.topic_model, self.config)
 
     def find_groups(self):
-        # Normalize the ctfidf representation of topics.
         c_tf_idf_mms = mms().fit_transform(self.topic_model.c_tf_idf_.toarray())
-        
-        # This helps us to visualize
         self.c_tf_idf_vis = UMAP(n_neighbors=2, n_components=2, metric='hellinger', random_state=self.config['random_state']).fit_transform(c_tf_idf_mms)
         self.c_tf_idf_embed = UMAP(**self.config['group_umap_params']).fit_transform(c_tf_idf_mms)
-
-        
-        # Find the ideal # of groups.
         ideal_n_clusters = self.find_ideal_num_groups()
-
         self.groups = SpectralClustering(n_clusters=ideal_n_clusters, random_state=self.config['random_state']).fit_predict(self.c_tf_idf_embed) + 1
 
     def label_groups(self):
-        # Label groups
         self.group_labeler = GroupLabeling(self.topics, self.topic_labeler.topic_labels, self.groups)
-
 
     def find_ideal_num_groups(self, llim=3, ulim=40):
         c_tf_idf_embed = self.c_tf_idf_embed
         n_samples = c_tf_idf_embed.shape[0]
-        # Ensure the upper bound does not exceed the number of samples + 1
         upper_bound = min(ulim, n_samples + 1)
         ss = []
         cluster_arr = np.arange(llim, upper_bound, 2)
@@ -215,10 +204,8 @@ class TopicModeling():
             clusters = SpectralClustering(n_clusters=n_clusters, random_state=42, n_components=2).fit_predict(c_tf_idf_embed)
             ss.append(silhouette_score(c_tf_idf_embed, clusters))
         ideal_n_clusters = cluster_arr[np.argmax(ss)]
-        # Also ensure the ideal number is capped by the number of samples
         ideal_n_clusters = min(ideal_n_clusters, n_samples)
         print("top silhouette score: {0:0.3f} for at n_clusters {1}".format(np.max(ss), ideal_n_clusters))
-        self.ss = ss
         return ideal_n_clusters
 
 
@@ -253,135 +240,72 @@ class TopicModeling():
         print("top silhouette score: {0:0.3f} for at n_clusters {1}".format(np.max(ss), cluster_arr[np.argmax(ss)]))    
         return ideal_n_clusters
 
-    def plot_topics(self):
+        def plot_topics(self):
         with sns.plotting_context('notebook'):
             sns.set_style('white')
             plt.figure(figsize=(10, 5))
-
             vis_arr = self.c_tf_idf_vis
             n_clusters = self.groups.max() - self.groups.min() + 1
-
-            ax = sns.scatterplot(x=vis_arr[:, 0], y=vis_arr[:, 1], size=self.topic_model.get_topic_info()['Count'], \
-                            hue=self.groups, \
-                            sizes=(100, 5000), \
-                            alpha=0.5, palette='tab20', legend=True, edgecolor='k')
-
-            h,l = ax.get_legend_handles_labels()
-            legend = plt.legend(h[0:n_clusters],l[0:n_clusters], bbox_to_anchor=(-0.011, -1.95) , loc='lower left', borderaxespad=1, fontsize=10, labels=self.group_labeler.group_labels.values())
-            # legend.legend_handles[0]._sizes = legend.legend_handles[1]._sizes
+            ax = sns.scatterplot(x=vis_arr[:, 0], y=vis_arr[:, 1],
+                                 size=self.topic_model.get_topic_info()['Count'],
+                                 hue=self.groups,
+                                 sizes=(100, 5000),
+                                 alpha=0.5, palette='tab20', legend=True, edgecolor='k')
+            h, l = ax.get_legend_handles_labels()
+            plt.legend(h[0:n_clusters], l[0:n_clusters], bbox_to_anchor=(-0.011, -1.95), loc='lower left', borderaxespad=1, fontsize=10)
             ax.set_title('Topics, Grouped by Similarity of Content', fontsize=16, pad=10)
             ax.set_xlabel('Feature 1')
             ax.set_ylabel('Feature 2')
             ax.set_xticklabels([])
             ax.set_yticklabels([])
-
-            ax.figure.savefig(f'{config["save_dir"]}/figure_groups.png', dpi=300, bbox_inches="tight")
-
-        # with sns.plotting_context('notebook'):
-        #     sns.set_style('white')
-        #     plt.figure(figsize=(10, 9))
-
-        #     vis_arr = points_2d
-        #     hue_arr = groups_per_disc
-
-        #     n_clusters = np.max(hue_arr) - np.min(hue_arr) + 1
-
-        #     ax = sns.scatterplot(x=vis_arr[:, 0], y=vis_arr[:, 1], size=0.01, \
-        #                     hue=hue_arr, \
-        #                     alpha=0.5, palette='Set1', legend=True)
-
-        #     h,l = ax.get_legend_handles_labels()
-        #     legend = plt.legend(bbox_to_anchor=(1, -0.02) , loc='lower left', borderaxespad=1, fontsize=10, labels=group_labels_ctfidf_llm.values())
-            
-        #     ax.set_title('Groups within GLP1RA-Related Discussions', fontsize=16, pad=10)
-        #     ax.set_xlim([-10, 10])
-        #     ax.set_ylim([-10, 10])
-        #     ax.set_xlabel('Feature 1')
-        #     ax.set_ylabel('Feature 2')
-        #     ax.set_xticklabels([])
-        #     ax.set_yticklabels([])
-
-            ax.figure.savefig(f'{config["save_dir"]}/figure_topics_bydisc.png', dpi=300, bbox_inches="tight")
-
+            ax.figure.savefig(f'{self.config["save_dir"]}/figure_topics_bydisc.png', dpi=300, bbox_inches="tight")
 
     def create_topic_table(self):
         df, topics, embeddings = self.df, self.topics, self.embeddings
         topic_labels, groups = self.topic_labeler.topic_labels, self.groups
-
-        # Find a single representative doc per topic (already in code)
         rep_docs = TopicLabeling.find_representative_docs_per_topic(df, topics, embeddings, 1)
-
-        # Create a DataFrame to store topic info
         topic_table = pd.DataFrame(
-            index=np.arange(1, np.max(topics) + 2).astype('int'), 
+            index=np.arange(1, np.max(topics) + 2).astype('int'),
             columns=[
-                'Discussions (#)', 
-                'Group', 
-                'Topic Label', 
+                'Discussions (#)',
+                'Group',
+                'Topic Label',
                 'Representative Post',
                 'Post IDs',
-                'c-TF-IDF Keywords'  # <--- NEW COLUMN
+                'c-TF-IDF Keywords'
             ]
         )
-
-        # Decide how many top words to show
         top_n = 5
-
         for group in range(1, groups.max() + 1):
             topics_group_i = np.where(groups == group)[0]
-
             for tl_i in topics_group_i:
-                topic_table.loc[tl_i + 1, 'Topic Label'] = topic_labels[tl_i]
+                topic_table.loc[tl_i + 1, 'Topic Label'] = self.topic_labeler.topic_labels[tl_i]
                 topic_table.loc[tl_i + 1, 'Group'] = group
                 topic_table.loc[tl_i + 1, 'Representative Post'] = rep_docs[tl_i][0]
                 topic_table.loc[tl_i + 1, 'Discussions (#)'] = len(np.where(np.array(topics) == tl_i)[0])
-
-                # 1) Collect all the IDs for docs in this topic (tl_i)
-                post_ids = df.loc[np.array(topics) == tl_i, 'id']  
+                post_ids = df.loc[np.array(topics) == tl_i, 'id']
                 post_ids_str = ", ".join(post_ids.astype(str))
                 topic_table.loc[tl_i + 1, 'Post IDs'] = post_ids_str
-
-                # 2) Retrieve top c-TF-IDF words for this topic (tl_i)
-                #    get_topic(tl_i) returns a list of (word, ctfidf_weight).
                 ctfidf_words = self.topic_model.get_topic(tl_i)[:top_n]
-                
-                # 3) Format them as a comma-separated string of just the words
                 top_words_str = ", ".join(word for word, weight in ctfidf_words)
-
-                # 4) Store in the new column
                 topic_table.loc[tl_i + 1, 'c-TF-IDF Keywords'] = top_words_str
-
-        # Finally, save to Excel
-        topic_table.to_excel(f'{config["save_dir"]}/topic_table.xlsx')
-
-
-
-    def load_topic_model(self, path_to_topic_model):
-        # Load a saved topic model.
-        raise NotImplementedError
+        topic_table.to_excel(f'{self.config["save_dir"]}/topic_table.xlsx')
 
     def send_groups(self):
-        # Connect to RabbitMQ
         connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq", port=5672))
         channel = connection.channel()
-
-        # Declare a queue (it must be declared in both producer & consumer)
         channel.queue_declare(queue="grouping_results", durable=True)
         groups = self.groups
-        """
-        Sends clustering results to RabbitMQ.
-        """
         message = json.dumps(groups.tolist())
         channel.basic_publish(
             exchange="",
             routing_key="grouping_results",
             body=message,
-            properties=pika.BasicProperties(
-                delivery_mode=2,  # Makes message persistent
-            )
+            properties=pika.BasicProperties(delivery_mode=2)
         )
         print(f" [x] Sent {message}")
         connection.close()
+
 
 class TopicLabeling():
 
@@ -630,14 +554,21 @@ class GroupLabeling():
 
         return text
 
+
 if __name__ == '__main__':
-    # Enter input data via argparse.
+    import sys
+    from sklearn.metrics import silhouette_score  # Needed for find_ideal_num_groups
     parser = argparse.ArgumentParser()
-    parser.add_argument('data', type=str, default='data/cac_db.xlsx', help='Path to dataset')
-    parser.add_argument('output', type=str, default='data/topic_model_res.xlsx', help='Path to save topic, group labels')
+    parser.add_argument('data', type=str, nargs='?', default='api', help='Set to "api" to query data via the API')
+    parser.add_argument('output', type=str, nargs='?', default='saved/topic_model_res.xlsx', help='Path to save topic, group labels')
     args = parser.parse_args()
 
-    config['data'] = args.data
+    # Update config to use API if specified.
+    if args.data == 'api':
+        config['data_source'] = 'api'
+    else:
+        config['data'] = args.data
+
     config['output'] = args.output
 
     topic_model = TopicModeling(config)

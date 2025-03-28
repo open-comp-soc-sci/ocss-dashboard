@@ -8,8 +8,8 @@ function Data() {
   const [searchData, setSearchData] = useState([]);
   const [subreddit, setSubreddit] = useState('');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(new Date('2024-12-01'));
+  const [endDate, setEndDate] = useState(new Date('2024-12-31'));  
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
@@ -17,15 +17,15 @@ function Data() {
   const [option, setOption] = useState("reddit_submissions");
   const [selectedOption, setSelectedOption] = useState("reddit_submissions");
   const [allClickData, setAllClickData] = useState([]);
+  const [sentimentResults, setSentimentResults] = useState(null);
+  const [loadingSentiment, setLoadingSentiment] = useState(false);
 
   const fetchSearchHistory = async () => {
     try {
       const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-
       if (!response.ok) {
         throw new Error('Backend Fetch Failed');
       }
-
       const data = await response.json();
       setSearchData(data.search_history || []);
     } catch (error) {
@@ -37,12 +37,12 @@ function Data() {
 
   const fetchClickData = async () => {
     try {
-      const response = await fetch(`/api/get_click?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}`);
-
+      const response = await fetch(
+        `/api/get_click?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}`
+      );
       if (!response.ok) {
         throw new Error('ClickHouse fetch failed.');
       }
-
       const data = await response.json();
       setClickData(data);
     } catch (error) {
@@ -54,33 +54,26 @@ function Data() {
     try {
       const response = await fetch('/api/add_search', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subreddit: `r/${subreddit}`,
           sentimentKeywords: sentimentKeywords,
           startDate: startDate,
           endDate: endDate,
-          //sorry for commenting out, i am unsure of when this is used
-          //dateText: dates,
           searchTerms: searchTerms,
           email: email,
         }),
       });
-
       if (!response.ok) {
         throw new Error('Frontend Post to Backend Failed');
       }
-
       const data = await response.json();
       console.log('Search Query:', data);
-
       fetchSearchHistory();
     } catch (error) {
       setError(error.message);
     }
-  }
+  };
 
   const handleKeywordKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -106,9 +99,6 @@ function Data() {
   useEffect(() => {
     const fetchData = async (start, length, draw) => {
       try {
-        //start = start || 0;
-        //length = length || 10;
-        //draw = draw || 1;
         console.log(`Fetching data with start=${start}, length=${length}, draw=${draw}`);
         const response = await fetch(`/api/get_all_click?length=${length}&start=${start}&draw=${draw}`);
         const data = await response.json();
@@ -125,9 +115,7 @@ function Data() {
         paging: true,
         ajax: function (data, callback, settings) {
           const { start = 0, length = 10, draw = 1 } = settings;
-
           console.log("start:", start, "length:", length, "draw:", draw);
-
           fetchData(start, length, draw).then((apiData) => {
             if (apiData && Array.isArray(apiData.data)) {
               callback({
@@ -143,21 +131,11 @@ function Data() {
               });
             } else {
               console.error("API data is not in expected format:", apiData);
-              callback({
-                draw: apiData.draw,
-                recordsTotal: 0,
-                recordsFiltered: 0,
-                data: [],
-              });
+              callback({ draw: apiData.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
             }
           }).catch((error) => {
             console.error("Error fetching data:", error);
-            callback({
-              draw: 1,
-              recordsTotal: 0,
-              recordsFiltered: 0,
-              data: [],
-            });
+            callback({ draw: 1, recordsTotal: 0, recordsFiltered: 0, data: [] });
           });
         },
         columns: [
@@ -167,28 +145,26 @@ function Data() {
           { data: "created_utc", title: "Created UTC" },
         ],
         pageLength: 10,
-        lengthChange: true, //hide page length selector until paging works
+        lengthChange: true,
         deferRender: true,
         responsive: true,
         scrollY: "400px",
         scrollX: false,
         scroller: true,
         autoWidth: false,
-        dom: '<"top">rt<"bottom"p><"clear">', //hide search bar until implemented
+        dom: '<"top">rt<"bottom"p><"clear">',
         columnDefs: [
           {
             targets: '_all',
-            createdCell: function (td, cellData, rowData, row, col) {
+            createdCell: function (td) {
               $(td).css('border-right', '1px solid #333');
             }
           }
         ],
-
       });
     };
 
     initDataTable();
-
     return () => {
       if ($.fn.dataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().destroy();
@@ -196,9 +172,32 @@ function Data() {
     };
   }, []);
 
+  const runSentimentAnalysis = async () => {
+    setLoadingSentiment(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/run_sentiment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subreddit: subreddit,
+          option: selectedOption
+        })
+      });
+      if (!response.ok) {
+        throw new Error("Sentiment analysis failed.");
+      }
+      const resultData = await response.json();
+      setSentimentResults(resultData.result);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingSentiment(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setOption(selectedOption);
     setError(null);
     await fetchClickData();
@@ -206,10 +205,7 @@ function Data() {
   };
 
   return (
-    <div
-      className="container mt-5"
-
-    >
+    <div className="container mt-5">
       {/* Page Header */}
       <div className="text-center">
         <h1>Data Page</h1>
@@ -239,7 +235,6 @@ function Data() {
               <h2>Sentiment Keywords</h2>
               <div className="form-group">
                 <label>Type a keyword and press Enter</label>
-                {/* Temporarily added value={sentimentKeywords} just to clear on search until dropdown list. */}
                 <input
                   type="text"
                   className="form-control"
@@ -249,7 +244,6 @@ function Data() {
                   placeholder="e.g. happy"
                 />
               </div>
-              {/* Display search terms as removable chips */}
               <div className="mt-2">
                 {searchTerms.map((term, index) => (
                   <span
@@ -267,7 +261,7 @@ function Data() {
             <div className="mt-4">
               <h2>Dates</h2>
               <div className="mt-3">
-                <label>Select Start Date:        </label>
+                <label>Select Start Date:</label>
                 <ReactDatePicker
                   selected={startDate}
                   onChange={(date) => setStartDate(date)}
@@ -279,19 +273,20 @@ function Data() {
                 />
               </div>
               <div className="mt-3">
-                <label>Select End Date:    </label>
+                <label>Select End Date:</label>
                 <ReactDatePicker
                   selected={endDate}
                   onChange={(date) => setEndDate(date)}
                   selectsEnd
                   startDate={startDate}
                   endDate={endDate}
-                  minDate={startDate} // ensures end date isn't before start date
+                  minDate={startDate}
                   className="form-control"
                   placeholderText="End Date"
                 />
               </div>
             </div>
+
             <div className="mt-4">
               <h2>Search Options</h2>
               <div className="form-group">
@@ -324,6 +319,7 @@ function Data() {
                 </div>
               </div>
             </div>
+
             <div className="mt-4">
               <button type="submit" className="btn btn-primary mt-2">
                 Submit
@@ -333,12 +329,9 @@ function Data() {
           {error && <p className="text-danger mt-3">Error: {error}</p>}
         </div>
 
-        {/* Timeline*/}
         <div className="col-md-8">
           <h2>Sentiment Analysis</h2>
           <p>Posts containing value (PLACEHOLDER DATE RANGE)</p>
-
-          {/* Chart */}
           <div
             style={{
               backgroundColor: '#333',
@@ -347,20 +340,27 @@ function Data() {
               marginBottom: '1rem'
             }}
           >
-            {/* PUT CHART HERE*/}
+            {/* PUT CHART HERE */}
           </div>
-
           <button className="btn btn-secondary">Save as PNG</button>
+          <div className="mt-4">
+            <button className="btn btn-success" onClick={runSentimentAnalysis}>
+              {loadingSentiment ? 'Analyzing...' : 'Run Sentiment Analysis'}
+            </button>
+          </div>
+          {sentimentResults && (
+            <div className="mt-3">
+              <h4>Sentiment Analysis Results:</h4>
+              <pre>{JSON.stringify(sentimentResults, null, 2)}</pre>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* DataTables */}
       <div>
         <table id="click-table" className="display">
-          <thead>
-          </thead>
-          <tbody>
-          </tbody>
+          <thead></thead>
+          <tbody></tbody>
         </table>
       </div>
 
@@ -374,12 +374,9 @@ function Data() {
               <li key={index} style={{ marginBottom: '1rem' }}>
                 {option === "reddit_submissions" ? (
                   <>
-                    <strong>Subreddit: </strong> r/{item[1]}
-                    <br />
-                    <strong>Title: </strong> {item[2]}
-                    <br />
-                    <strong>Body: </strong> {item[3]}
-                    <br />
+                    <strong>Subreddit: </strong> r/{item[1]}<br />
+                    <strong>Title: </strong> {item[2]}<br />
+                    <strong>Body: </strong> {item[3]}<br />
                     <strong>Link: </strong>
                     <a
                       href={`https://reddit.com/r/${item[1]}/comments/${item[0]}`}
@@ -387,17 +384,13 @@ function Data() {
                       rel="noopener noreferrer"
                     >
                       reddit.com/r/{item[1]}/comments/{item[0]}
-                    </a>
-                    <br />
-                    <strong>Created_UTC: </strong> {item[4]}
-                    <br />
+                    </a><br />
+                    <strong>Created_UTC: </strong> {item[4]}<br />
                   </>
                 ) : (
                   <>
-                    <strong>Subreddit: </strong> r/{item[2]}
-                    <br />
-                    <strong>Comment: </strong> {item[3]}
-                    <br />
+                    <strong>Subreddit: </strong> r/{item[2]}<br />
+                    <strong>Comment: </strong> {item[3]}<br />
                     <strong>Link: </strong>
                     <a
                       href={`https://reddit.com/r/${item[2]}/comments/${item[1]}`}
@@ -405,8 +398,7 @@ function Data() {
                       rel="noopener noreferrer"
                     >
                       reddit.com/r/{item[2]}/comments/{item[1]}
-                    </a>
-                    <br />
+                    </a><br />
                     <strong>Created_UTC: </strong> {item[4]}
                   </>
                 )}
@@ -416,7 +408,6 @@ function Data() {
         )}
       </div>
 
-
       <div className="mt-5">
         <h2>Search History</h2>
         {searchData.length === 0 ? (
@@ -425,12 +416,9 @@ function Data() {
           <ul>
             {searchData.map((item, index) => (
               <li key={index} style={{ marginBottom: '1rem' }}>
-                <strong>Reddit:</strong> {item.subreddit}
-                <br />
-                <strong>Terms:</strong> {item.sentimentKeywords}
-                <br />
-                <strong>Time Range:</strong> {new Date(item.startDate).toLocaleDateString('en-US')} - {new Date(item.endDate).toLocaleDateString('en-US')}
-                <br />
+                <strong>Reddit:</strong> {item.subreddit}<br />
+                <strong>Terms:</strong> {item.sentimentKeywords}<br />
+                <strong>Time Range:</strong> {new Date(item.startDate).toLocaleDateString('en-US')} - {new Date(item.endDate).toLocaleDateString('en-US')}<br />
                 <strong>Date:</strong> {item.created_utc}
               </li>
             ))}
@@ -438,7 +426,6 @@ function Data() {
         )}
       </div>
     </div>
-
   );
 }
 
