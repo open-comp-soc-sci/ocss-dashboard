@@ -9,14 +9,13 @@ function Data() {
   const [subreddit, setSubreddit] = useState('');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
   const [startDate, setStartDate] = useState(new Date('2024-12-01'));
-  const [endDate, setEndDate] = useState(new Date('2024-12-31'));  
+  const [endDate, setEndDate] = useState(new Date('2024-12-31'));
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
   const [clickData, setClickData] = useState([]);
   const [option, setOption] = useState("reddit_submissions");
   const [selectedOption, setSelectedOption] = useState("reddit_submissions");
-  const [allClickData, setAllClickData] = useState([]);
   const [sentimentResults, setSentimentResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
 
@@ -99,7 +98,6 @@ function Data() {
   useEffect(() => {
     const fetchData = async (start, length, draw) => {
       try {
-        console.log(`Fetching data with start=${start}, length=${length}, draw=${draw}`);
         const response = await fetch(`/api/get_all_click?length=${length}&start=${start}&draw=${draw}`);
         const data = await response.json();
         return data;
@@ -109,13 +107,13 @@ function Data() {
     };
 
     const initDataTable = () => {
-      $("#click-table").DataTable({
+      const table = $("#click-table").DataTable({
         processing: true,
         serverSide: true,
         paging: true,
         ajax: function (data, callback, settings) {
-          const { start = 0, length = 10, draw = 1 } = settings;
-          console.log("start:", start, "length:", length, "draw:", draw);
+          const { start, length, draw } = settings.oAjaxData;
+
           fetchData(start, length, draw).then((apiData) => {
             if (apiData && Array.isArray(apiData.data)) {
               callback({
@@ -127,44 +125,78 @@ function Data() {
                   title: row[1],
                   selftext: row[2],
                   created_utc: row[3],
+                  id: row[4],
                 })),
               });
             } else {
               console.error("API data is not in expected format:", apiData);
-              callback({ draw: apiData.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
+              callback({
+                draw: apiData.draw,
+                recordsTotal: 0,
+                recordsFiltered: 0,
+                data: [],
+              });
             }
           }).catch((error) => {
             console.error("Error fetching data:", error);
-            callback({ draw: 1, recordsTotal: 0, recordsFiltered: 0, data: [] });
+            callback({
+              draw: 1,
+              recordsTotal: 0,
+              recordsFiltered: 0,
+              data: [],
+            });
           });
         },
         columns: [
-          { data: "subreddit", title: "Subreddit" },
-          { data: "title", title: "Title" },
-          { data: "selftext", title: "Body" },
-          { data: "created_utc", title: "Created UTC" },
+          { data: "subreddit", title: "Subreddit", width: '10%' },
+          { data: "title", title: "Title", width: '20%' },
+          { data: "selftext", title: "Body", width: '50%' },
+          { data: "created_utc", title: "Created UTC", width: '150px' },
+          {
+            data: "id",
+            title: "Post Link",
+            width: '150px',
+            render: function (data, type, row) {
+              const subreddit = row.subreddit;
+              const postLink = `https://reddit.com/r/${subreddit}/comments/${data}`;
+              return `<a href="${postLink}" target="_blank">View Post</a>`;
+            }
+          }
         ],
         pageLength: 10,
         lengthChange: true,
+        lengthMenu: [10, 25, 50, 75, 100],
         deferRender: true,
         responsive: true,
         scrollY: "400px",
         scrollX: false,
         scroller: true,
         autoWidth: false,
-        dom: '<"top">rt<"bottom"p><"clear">',
+        dom: 'fltBip',  //search function needs to be updated with filters
         columnDefs: [
           {
             targets: '_all',
-            createdCell: function (td) {
-              $(td).css('border-right', '1px solid #333');
+            createdCell: function (td, cellData, rowData, row, col) {
+              $(td).css('border', '1px solid #333');
             }
           }
         ],
+        //add later
+        buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+      });
+
+      $("#goToPageButton").on("click", function () {
+        const page = parseInt($("#pageInput").val(), 10) - 1;
+        if (!isNaN(page) && page >= 0) {
+          table.page(page).draw('page');
+        } else {
+          alert("Please enter a valid page number.");
+        }
       });
     };
 
     initDataTable();
+
     return () => {
       if ($.fn.dataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().destroy();
@@ -357,11 +389,27 @@ function Data() {
         </div>
       </div>
 
+      <br />
       <div>
-        <table id="click-table" className="display">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
+        <h2>DataTables Test</h2>
+        <div>
+          <table id="click-table" className="display">
+            <thead>
+              <tr>
+                <th>Subreddit</th>
+                <th>Title</th>
+                <th>Body</th>
+                <th>Created UTC</th>
+                <th>Post Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Data Table */}
+            </tbody>
+          </table>
+          <input type="number" id="pageInput" placeholder="Enter page number" />
+          <button id="goToPageButton">Go to page</button>
+        </div>
       </div>
 
       <div className="mt-5">
