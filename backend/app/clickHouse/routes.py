@@ -23,6 +23,9 @@ def get_new_client():
 def get_click():
     subreddit = request.args.get('subreddit', None)
     option = request.args.get('option', 'reddit_submissions')
+
+    print('hello')
+    print(subreddit)
     client = get_new_client()
 
     try:
@@ -52,34 +55,59 @@ def get_all_click():
         length = request.args.get('length', default=10, type=int)
         start = request.args.get('start', default=0, type=int)
         draw = request.args.get('draw', default=1, type=int)
+        option = request.args.get('option', default='reddit_submissions')
+        subreddit = request.args.get('subreddit', '', type=str)
         client = get_new_client()
         search_value = request.args.get('search[value]', '', type=str)
 
-        query = f"""
-            SELECT subreddit, title, selftext, created_utc, id
-            FROM reddit_submissions
-        """
+        # Build the base query based on the option.
+        if option == "reddit_submissions":
+            base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
+        elif option == "reddit_comments":
+            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, id FROM reddit_comments"
+        else:
+            return jsonify({"error": "Invalid option provided."}), 400
 
+        # Build the conditions.
+        conditions = []
+        if subreddit:
+            conditions.append(f"subreddit = '{subreddit}'")
         if search_value:
-            query += f" WHERE subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%'"
+            conditions.append(f"(subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%')")
 
+        query = base_query
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        # Add ORDER BY after the WHERE clause
+        query += " ORDER BY created_utc DESC"
         query += f" LIMIT {length} OFFSET {start}"
+
+        print("Executing query:", query, flush=True)  # Debug output
 
         result = client.query(query)
         data = result.result_rows
-        count_query = "SELECT COUNT(*) FROM reddit_submissions"
+
+        # Build the count query.
+        if option == "reddit_submissions":
+            count_query = "SELECT COUNT(*) FROM reddit_submissions"
+        else:
+            count_query = "SELECT COUNT(*) FROM reddit_comments"
+        if conditions:
+            count_query += " WHERE " + " AND ".join(conditions)
         total_result = client.query(count_query)
         total_records = total_result.result_rows[0][0]
 
         return jsonify({
-            "draw": draw, 
-            "recordsTotal": total_records,  
-            "recordsFiltered": total_records, 
-            "data": data 
+            "draw": draw,
+            "recordsTotal": total_records,
+            "recordsFiltered": total_records,
+            "data": data
         })
 
     except Exception as e:
+        print(e, flush=True)
         return jsonify({"error": str(e)}), 500
+
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
