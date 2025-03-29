@@ -82,11 +82,15 @@ function Data() {
 
   // Initialize main results DataTable on mount.
   useEffect(() => {
-    const fetchData = async (start, length, draw) => {
+    const fetchData = async (start, length, draw, searchValue) => {
       try {
+        // Include subreddit, option, built-in search value, and sentimentKeywords in the query parameters.
         const response = await fetch(
           `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
-          `&subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}`
+          `&subreddit=${encodeURIComponent(subreddit)}` +
+          `&option=${encodeURIComponent(selectedOption)}` +
+          `&search_value=${encodeURIComponent(searchValue)}` +
+          `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}`
         );
         const data = await response.json();
         return data;
@@ -94,16 +98,18 @@ function Data() {
         console.error("Error fetching data:", error);
       }
     };
-
+  
     const initDataTable = () => {
       $("#click-table").DataTable({
         processing: true,
         serverSide: true,
         paging: true,
         pagingType: "full_numbers",
-        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+        // Remove the built-in search field from the dom and disable searching.
+        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
              "<'row'<'col-sm-12'tr>>" +
              "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+        searching: false,
         ajax: function (data, callback, settings) {
           if (!tableInitializedRef.current) {
             callback({
@@ -114,8 +120,9 @@ function Data() {
             });
             return;
           }
-          const { start, length, draw } = settings.oAjaxData;
-          fetchData(start, length, draw).then(apiData => {
+          const { start, length, draw, search } = data;
+          // Pass the built-in search value even though searching is disabled (in case you need it).
+          fetchData(start, length, draw, search.value).then(apiData => {
             if (apiData && Array.isArray(apiData.data)) {
               callback({
                 draw: apiData.draw,
@@ -181,7 +188,7 @@ function Data() {
           }
         }
       });
-
+  
       $("#goToPageButton").on("click", function () {
         const page = parseInt($("#pageInput").val(), 10) - 1;
         if (!isNaN(page) && page >= 0) {
@@ -191,15 +198,16 @@ function Data() {
         }
       });
     };
-
+  
     initDataTable();
-
+  
     return () => {
       if ($.fn.DataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().destroy();
       }
     };
-  }, [subreddit, selectedOption]);
+  }, [subreddit, selectedOption, sentimentKeywords]);
+  
 
   // When Submit is clicked, mark table as initialized and reload the DataTable.
   const handleSubmit = async (e) => {
@@ -289,7 +297,6 @@ function Data() {
         {/* Search Form */}
         <div className="col-md-4">
           <h2>Subreddit Search</h2>
-          <p>(Query should include parameter options from wireframe)</p>
           <form onSubmit={handleSubmit}>
             <div className="form-group">
               <label>Subreddit</label>
