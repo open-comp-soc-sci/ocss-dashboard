@@ -1,53 +1,43 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import $ from 'jquery';
-import 'datatables.net';
+import 'datatables.net-bs5';
 
 function Data() {
-  const [searchData, setSearchData] = useState([]);
-  const [subreddit, setSubreddit] = useState('');
+
+  const [subreddit, setSubreddit] = useState('survivor');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
   const [startDate, setStartDate] = useState(new Date('2024-12-01'));
   const [endDate, setEndDate] = useState(new Date('2024-12-31'));
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
-  const [clickData, setClickData] = useState([]);
   const [option, setOption] = useState("reddit_submissions");
   const [selectedOption, setSelectedOption] = useState("reddit_submissions");
   const [sentimentResults, setSentimentResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
+  const [searchData, setSearchData] = useState([]);
 
-  const fetchSearchHistory = async () => {
-    try {
-      const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-      if (!response.ok) {
-        throw new Error('Backend Fetch Failed');
-      }
-      const data = await response.json();
-      setSearchData(data.search_history || []);
-    } catch (error) {
-      if (error.message !== 'Backend Fetch Failed') {
-        setError(error.message);
-      }
-    }
-  };
+  // This ref controls whether the main results DataTable should fetch data
+  const tableInitializedRef = useRef(false);
 
-  const fetchClickData = async () => {
-    try {
-      const response = await fetch(
-        `/api/get_click?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}`
-      );
-      if (!response.ok) {
-        throw new Error('ClickHouse fetch failed.');
+  // Fetch search history immediately on mount.
+  useEffect(() => {
+    const fetchSearchHistory = async () => {
+      try {
+        const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
+        if (!response.ok) throw new Error('Backend Fetch Failed');
+        const data = await response.json();
+        setSearchData(data.search_history || []);
+      } catch (error) {
+        if (error.message !== 'Backend Fetch Failed') {
+          setError(error.message);
+        }
       }
-      const data = await response.json();
-      setClickData(data);
-    } catch (error) {
-      setError(error.message);
-    }
-  };
+    };
+    fetchSearchHistory();
+  }, [email]);
 
   const AddSearch = async () => {
     try {
@@ -63,12 +53,13 @@ function Data() {
           email: email,
         }),
       });
-      if (!response.ok) {
-        throw new Error('Frontend Post to Backend Failed');
-      }
+      if (!response.ok) throw new Error('Frontend Post to Backend Failed');
       const data = await response.json();
       console.log('Search Query:', data);
-      fetchSearchHistory();
+      // Refresh search history after adding a search.
+      const response2 = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
+      const data2 = await response2.json();
+      setSearchData(data2.search_history || []);
     } catch (error) {
       setError(error.message);
     }
@@ -79,26 +70,24 @@ function Data() {
       e.preventDefault();
       const newTerm = e.target.value.trim();
       if (newTerm && !searchTerms.includes(newTerm)) {
-        setSearchTerms((prevTerms) => [...prevTerms, newTerm]);
+        setSearchTerms(prevTerms => [...prevTerms, newTerm]);
       }
       e.target.value = '';
     }
   };
 
   const removeTerm = (term) => {
-    setSearchTerms(searchTerms.filter((t) => t !== term));
+    setSearchTerms(searchTerms.filter(t => t !== term));
   };
 
-  useEffect(() => {
-    if (email) {
-      fetchSearchHistory();
-    }
-  }, [email]);
-
+  // Initialize main results DataTable on mount.
   useEffect(() => {
     const fetchData = async (start, length, draw) => {
       try {
-        const response = await fetch(`/api/get_all_click?length=${length}&start=${start}&draw=${draw}`);
+        const response = await fetch(
+          `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
+          `&subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}`
+        );
         const data = await response.json();
         return data;
       } catch (error) {
@@ -107,44 +96,51 @@ function Data() {
     };
 
     const initDataTable = () => {
-      const table = $("#click-table").DataTable({
+      $("#click-table").DataTable({
         processing: true,
         serverSide: true,
         paging: true,
+        pagingType: "full_numbers",
+        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+             "<'row'<'col-sm-12'tr>>" +
+             "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
         ajax: function (data, callback, settings) {
+          if (!tableInitializedRef.current) {
+            callback({
+              draw: data.draw,
+              recordsTotal: 0,
+              recordsFiltered: 0,
+              data: []
+            });
+            return;
+          }
           const { start, length, draw } = settings.oAjaxData;
-
-          fetchData(start, length, draw).then((apiData) => {
+          fetchData(start, length, draw).then(apiData => {
             if (apiData && Array.isArray(apiData.data)) {
               callback({
                 draw: apiData.draw,
                 recordsTotal: apiData.recordsTotal,
                 recordsFiltered: apiData.recordsFiltered,
-                data: apiData.data.map((row) => ({
+                data: apiData.data.map(row => ({
                   subreddit: row[0],
                   title: row[1],
                   selftext: row[2],
                   created_utc: row[3],
                   id: row[4],
-                })),
+                }))
               });
             } else {
               console.error("API data is not in expected format:", apiData);
               callback({
-                draw: apiData.draw,
+                draw: data.draw,
                 recordsTotal: 0,
                 recordsFiltered: 0,
-                data: [],
+                data: []
               });
             }
-          }).catch((error) => {
+          }).catch(error => {
             console.error("Error fetching data:", error);
-            callback({
-              draw: 1,
-              recordsTotal: 0,
-              recordsFiltered: 0,
-              data: [],
-            });
+            callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
           });
         },
         columns: [
@@ -157,38 +153,39 @@ function Data() {
             title: "Post Link",
             width: '150px',
             render: function (data, type, row) {
-              const subreddit = row.subreddit;
-              const postLink = `https://reddit.com/r/${subreddit}/comments/${data}`;
+              const postLink = `https://reddit.com/r/${row.subreddit}/comments/${data}`;
               return `<a href="${postLink}" target="_blank">View Post</a>`;
             }
           }
         ],
         pageLength: 10,
         lengthChange: true,
-        lengthMenu: [10, 25, 50, 75, 100],
         deferRender: true,
         responsive: true,
-        scrollY: "400px",
-        scrollX: false,
-        scroller: true,
         autoWidth: false,
-        dom: 'fltBip',  //search function needs to be updated with filters
         columnDefs: [
           {
             targets: '_all',
-            createdCell: function (td, cellData, rowData, row, col) {
+            createdCell: function (td) {
               $(td).css('border', '1px solid #333');
             }
           }
         ],
-        //add later
         buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+        language: {
+          paginate: {
+            first: "<<",
+            previous: "<",
+            next: ">",
+            last: ">>"
+          }
+        }
       });
 
       $("#goToPageButton").on("click", function () {
         const page = parseInt($("#pageInput").val(), 10) - 1;
         if (!isNaN(page) && page >= 0) {
-          table.page(page).draw('page');
+          $("#click-table").DataTable().page(page).draw('page');
         } else {
           alert("Please enter a valid page number.");
         }
@@ -198,11 +195,23 @@ function Data() {
     initDataTable();
 
     return () => {
-      if ($.fn.dataTable.isDataTable("#click-table")) {
+      if ($.fn.DataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().destroy();
       }
     };
-  }, []);
+  }, [subreddit, selectedOption]);
+
+  // When Submit is clicked, mark table as initialized and reload the DataTable.
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setOption(selectedOption);
+    setError(null);
+    await AddSearch();
+    tableInitializedRef.current = true;
+    if ($.fn.DataTable.isDataTable("#click-table")) {
+      $("#click-table").DataTable().ajax.reload();
+    }
+  };
 
   const runSentimentAnalysis = async () => {
     setLoadingSentiment(true);
@@ -216,9 +225,7 @@ function Data() {
           option: selectedOption
         })
       });
-      if (!response.ok) {
-        throw new Error("Sentiment analysis failed.");
-      }
+      if (!response.ok) throw new Error("Sentiment analysis failed.");
       const resultData = await response.json();
       setSentimentResults(resultData.result);
     } catch (err) {
@@ -228,23 +235,58 @@ function Data() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setOption(selectedOption);
-    setError(null);
-    await fetchClickData();
-    await AddSearch();
-  };
+  // Initialize search history DataTable when searchData changes.
+  useEffect(() => {
+    if (searchData.length > 0) {
+      if ($.fn.DataTable.isDataTable("#search-history-table")) {
+        $("#search-history-table").DataTable().destroy();
+      }
+      $("#search-history-table").DataTable({
+        data: searchData,
+        columns: [
+          { data: "subreddit", title: "Subreddit" },
+          { data: "sentimentKeywords", title: "Keywords" },
+          { 
+            data: "startDate", 
+            title: "Start Date",
+            render: function(data) {
+              return new Date(data).toLocaleDateString('en-US');
+            }
+          },
+          { 
+            data: "endDate", 
+            title: "End Date",
+            render: function(data) {
+              return new Date(data).toLocaleDateString('en-US');
+            }
+          },
+          { data: "created_utc", title: "Created Date" }
+        ],
+        paging: true,
+        searching: false,
+        ordering: true,
+        info: true,
+        autoWidth: false,
+        language: {
+          emptyTable: "No search history available."
+        },
+        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+             "<'row'<'col-sm-12'tr>>" +
+             "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+      });
+    }
+  }, [searchData]);
 
   return (
     <div className="container mt-5">
       {/* Page Header */}
       <div className="text-center">
         <h1>Data Page</h1>
-        <p>This is where the searches and results will be displayed. (Search History Also?)</p>
+        <p>This is where the searches, results and search history will be displayed.</p>
       </div>
 
       <div className="row mt-4">
+        {/* Search Form */}
         <div className="col-md-4">
           <h2>Subreddit Search</h2>
           <p>(Query should include parameter options from wireframe)</p>
@@ -258,7 +300,7 @@ function Data() {
                   className="form-control"
                   value={subreddit}
                   onChange={(e) => setSubreddit(e.target.value)}
-                  placeholder="Enter subreddit (e.g. survivor)"
+                  placeholder="Enter subreddit (e.g. news)"
                 />
               </div>
             </div>
@@ -353,14 +395,13 @@ function Data() {
             </div>
 
             <div className="mt-4">
-              <button type="submit" className="btn btn-primary mt-2">
-                Submit
-              </button>
+              <button type="submit" className="btn btn-primary mt-2">Submit</button>
             </div>
           </form>
           {error && <p className="text-danger mt-3">Error: {error}</p>}
         </div>
 
+        {/* Sentiment Analysis Section */}
         <div className="col-md-8">
           <h2>Sentiment Analysis</h2>
           <p>Posts containing value (PLACEHOLDER DATE RANGE)</p>
@@ -389,9 +430,9 @@ function Data() {
         </div>
       </div>
 
-      <br />
-      <div>
-        <h2>DataTables Test</h2>
+      {/* Main Results DataTable */}
+      <div className="mt-5">
+        <h2>Results</h2>
         <div>
           <table id="click-table" className="display">
             <thead>
@@ -403,75 +444,30 @@ function Data() {
                 <th>Post Link</th>
               </tr>
             </thead>
-            <tbody>
-              {/* Data Table */}
-            </tbody>
+            <tbody></tbody>
           </table>
           <input type="number" id="pageInput" placeholder="Enter page number" />
           <button id="goToPageButton">Go to page</button>
         </div>
       </div>
 
-      <div className="mt-5">
-        <h2>ClickHouse Data Print Test</h2>
-        {searchData.length === 0 ? (
-          <p>----------</p>
-        ) : (
-          <ul>
-            {clickData.map((item, index) => (
-              <li key={index} style={{ marginBottom: '1rem' }}>
-                {option === "reddit_submissions" ? (
-                  <>
-                    <strong>Subreddit: </strong> r/{item[1]}<br />
-                    <strong>Title: </strong> {item[2]}<br />
-                    <strong>Body: </strong> {item[3]}<br />
-                    <strong>Link: </strong>
-                    <a
-                      href={`https://reddit.com/r/${item[1]}/comments/${item[0]}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      reddit.com/r/{item[1]}/comments/{item[0]}
-                    </a><br />
-                    <strong>Created_UTC: </strong> {item[4]}<br />
-                  </>
-                ) : (
-                  <>
-                    <strong>Subreddit: </strong> r/{item[2]}<br />
-                    <strong>Comment: </strong> {item[3]}<br />
-                    <strong>Link: </strong>
-                    <a
-                      href={`https://reddit.com/r/${item[2]}/comments/${item[1]}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      reddit.com/r/{item[2]}/comments/{item[1]}
-                    </a><br />
-                    <strong>Created_UTC: </strong> {item[4]}
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
+      {/* Search History DataTable */}
       <div className="mt-5">
         <h2>Search History</h2>
-        {searchData.length === 0 ? (
-          <p>No search history.</p>
-        ) : (
-          <ul>
-            {searchData.map((item, index) => (
-              <li key={index} style={{ marginBottom: '1rem' }}>
-                <strong>Reddit:</strong> {item.subreddit}<br />
-                <strong>Terms:</strong> {item.sentimentKeywords}<br />
-                <strong>Time Range:</strong> {new Date(item.startDate).toLocaleDateString('en-US')} - {new Date(item.endDate).toLocaleDateString('en-US')}<br />
-                <strong>Date:</strong> {item.created_utc}
-              </li>
-            ))}
-          </ul>
-        )}
+        <div>
+          <table id="search-history-table" className="display">
+            <thead>
+              <tr>
+                <th>Subreddit</th>
+                <th>Keywords</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Created Date</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

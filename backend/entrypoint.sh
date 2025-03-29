@@ -13,4 +13,5 @@ done
 python create_tables.py
 
 echo "Starting Flask server..."
-exec flask run --host=0.0.0.0 --port=5000
+exec python -u -m flask run --host=0.0.0.0 --port=5000
+
