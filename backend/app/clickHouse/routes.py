@@ -59,6 +59,7 @@ def get_all_click():
         subreddit = request.args.get('subreddit', '', type=str)
         client = get_new_client()
         search_value = request.args.get('search[value]', '', type=str)
+        sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
 
         # Build the base query based on the option.
         if option == "reddit_submissions":
@@ -73,16 +74,23 @@ def get_all_click():
         if subreddit:
             conditions.append(f"subreddit = '{subreddit}'")
         if search_value:
-            conditions.append(f"(subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%')")
+            if option == "reddit_submissions":
+                conditions.append(f"(subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%')")
+            else:
+                conditions.append(f"(subreddit LIKE '%{search_value}%' OR body LIKE '%{search_value}%')")
+        if sentiment_keywords:
+            if option == "reddit_submissions":
+                conditions.append(f"(title LIKE '%{sentiment_keywords}%' OR selftext LIKE '%{sentiment_keywords}%')")
+            else:
+                conditions.append(f"(body LIKE '%{sentiment_keywords}%')")
 
         query = base_query
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
-        # Add ORDER BY after the WHERE clause
         query += " ORDER BY created_utc DESC"
         query += f" LIMIT {length} OFFSET {start}"
 
-        print("Executing query:", query, flush=True)  # Debug output
+        print("Executing query:", query, flush=True)
 
         result = client.query(query)
         data = result.result_rows
