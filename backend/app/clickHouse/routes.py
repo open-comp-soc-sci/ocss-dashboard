@@ -7,37 +7,54 @@ import pika
 from . import clickHouse_BP
 from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
 
-
 load_dotenv()
+
 def get_new_client():
     return get_client(
-    host=os.getenv('CH_HOST'),
-    port=os.getenv('CH_PORT'),
-    database=os.getenv('CH_DATABASE'),
-    username=os.getenv('CH_USER'),
-    password=os.getenv('CH_PASSWORD')
-    
-)
+        host=os.getenv('CH_HOST'),
+        port=os.getenv('CH_PORT'),
+        database=os.getenv('CH_DATABASE'),
+        username=os.getenv('CH_USER'),
+        password=os.getenv('CH_PASSWORD')
+    )
 
 @clickHouse_BP.route("/api/get_click", methods=["GET"])
 def get_click():
     subreddit = request.args.get('subreddit', None)
     option = request.args.get('option', 'reddit_submissions')
+    # Optionally, get date range (if needed in this endpoint)
+    start_date = request.args.get('startDate', None)
+    end_date = request.args.get('endDate', None)
 
     print('hello')
     print(subreddit)
     client = get_new_client()
 
     try:
+        # Build a date condition if dates are provided.
+        date_conditions = []
+        if start_date:
+            # Convert ISO date (e.g. "2024-10-01T23:00:00.000Z") to "YYYY-MM-DD HH:MM:SS"
+            start_date_formatted = start_date.replace("T", " ").split(".")[0]
+            date_conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
+        if end_date:
+            end_date_formatted = end_date.replace("T", " ").split(".")[0]
+            date_conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
+        date_clause = ""
+        if date_conditions:
+            date_clause = " AND " + " AND ".join(date_conditions)
+            
         if option == "reddit_submissions":
             query = (
                 f"SELECT id, subreddit, title, selftext, created_utc "
-                f"FROM reddit_submissions WHERE subreddit = '{subreddit}' LIMIT 10;"
+                f"FROM reddit_submissions WHERE subreddit = '{subreddit}'{date_clause} "
+                f"ORDER BY created_utc DESC LIMIT 10;"
             )
         elif option == "reddit_comments":
             query = (
                 f"SELECT id, parent_id, subreddit, body, created_utc "
-                f"FROM reddit_comments WHERE subreddit = '{subreddit}' LIMIT 10;"
+                f"FROM reddit_comments WHERE subreddit = '{subreddit}'{date_clause} "
+                f"ORDER BY created_utc DESC LIMIT 10;"
             )
         else:
             return jsonify({"error": "Invalid option provided."}), 400
@@ -48,11 +65,11 @@ def get_click():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 @clickHouse_BP.route("/api/get_all_click", methods=["GET"])
 def get_all_click():
     try:
-        length = request.args.get('length', default=10, type=int)
+        length = request.args.get('length', default=9999999999999, type=int)
         start = request.args.get('start', default=0, type=int)
         draw = request.args.get('draw', default=1, type=int)
         option = request.args.get('option', default='reddit_submissions')
@@ -60,6 +77,9 @@ def get_all_click():
         client = get_new_client()
         search_value = request.args.get('search[value]', '', type=str)
         sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
+        # Get datetime range from the query parameters (ISO strings)
+        start_date = request.args.get('startDate', None, type=str)
+        end_date = request.args.get('endDate', None, type=str)
 
         # Build the base query based on the option.
         if option == "reddit_submissions":
@@ -83,6 +103,13 @@ def get_all_click():
                 conditions.append(f"(title LIKE '%{sentiment_keywords}%' OR selftext LIKE '%{sentiment_keywords}%')")
             else:
                 conditions.append(f"(body LIKE '%{sentiment_keywords}%')")
+        # Reformat and add date conditions if provided.
+        if start_date:
+            start_date_formatted = start_date.replace("T", " ").split(".")[0]
+            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
+        if end_date:
+            end_date_formatted = end_date.replace("T", " ").split(".")[0]
+            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
 
         query = base_query
         if conditions:
@@ -116,15 +143,17 @@ def get_all_click():
         print(e, flush=True)
         return jsonify({"error": str(e)}), 500
 
-
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
     try:
         # Retrieve parameters from the POST body.
         request_data = request.get_json() or {}
         parameters = {
+            "data_source": request_data.get("data_source", "api"),
             "subreddit": request_data.get("subreddit", ""),
-            "option": request_data.get("option", "reddit_submissions")
+            "option": request_data.get("option", "reddit_submissions"),
+            "startDate": request_data.get("startDate", ""),   # Passed as ISO string
+            "endDate": request_data.get("endDate", "")          # Passed as ISO string
             # Add any additional parameters as needed.
         }
         message = json.dumps(parameters)

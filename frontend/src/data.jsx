@@ -5,11 +5,10 @@ import $ from 'jquery';
 import 'datatables.net-bs5';
 
 function Data() {
-
   const [subreddit, setSubreddit] = useState('survivor');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
   const [startDate, setStartDate] = useState(new Date('2024-12-01'));
-  const [endDate, setEndDate] = useState(new Date('2024-12-31'));
+  const [endDate, setEndDate] = useState(new Date('2024-12-30'));
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
@@ -80,17 +79,18 @@ function Data() {
     setSearchTerms(searchTerms.filter(t => t !== term));
   };
 
-  // Initialize main results DataTable on mount.
+  // Initialize main results DataTable on mount or when dependencies change.
   useEffect(() => {
     const fetchData = async (start, length, draw, searchValue) => {
       try {
-        // Include subreddit, option, built-in search value, and sentimentKeywords in the query parameters.
         const response = await fetch(
           `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
           `&subreddit=${encodeURIComponent(subreddit)}` +
           `&option=${encodeURIComponent(selectedOption)}` +
           `&search_value=${encodeURIComponent(searchValue)}` +
-          `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}`
+          `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
+          `&startDate=${encodeURIComponent(startDate.toISOString())}` +
+          `&endDate=${encodeURIComponent(endDate.toISOString())}`
         );
         const data = await response.json();
         return data;
@@ -98,7 +98,7 @@ function Data() {
         console.error("Error fetching data:", error);
       }
     };
-  
+
     const initDataTable = () => {
       $("#click-table").DataTable({
         processing: true,
@@ -121,7 +121,7 @@ function Data() {
             return;
           }
           const { start, length, draw, search } = data;
-          // Pass the built-in search value even though searching is disabled (in case you need it).
+          // Use current state values when fetching data.
           fetchData(start, length, draw, search.value).then(apiData => {
             if (apiData && Array.isArray(apiData.data)) {
               callback({
@@ -198,16 +198,16 @@ function Data() {
         }
       });
     };
-  
+
+    // Reinitialize the DataTable whenever these dependencies change.
     initDataTable();
-  
+
     return () => {
       if ($.fn.DataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().destroy();
       }
     };
-  }, [subreddit, selectedOption, sentimentKeywords]);
-  
+  }, [subreddit, selectedOption, sentimentKeywords, startDate, endDate]);
 
   // When Submit is clicked, mark table as initialized and reload the DataTable.
   const handleSubmit = async (e) => {
@@ -230,7 +230,9 @@ function Data() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subreddit: subreddit,
-          option: selectedOption
+          option: selectedOption,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString()
         })
       });
       if (!response.ok) throw new Error("Sentiment analysis failed.");
@@ -411,7 +413,7 @@ function Data() {
         {/* Sentiment Analysis Section */}
         <div className="col-md-8">
           <h2>Sentiment Analysis</h2>
-          <p>Posts containing value (PLACEHOLDER DATE RANGE)</p>
+          <p>Posts within the selected date range.</p>
           <div
             style={{
               backgroundColor: '#333',
