@@ -14,14 +14,15 @@ build:
 	docker build -t topic_model_api .
 
 run:
+	-docker network create ocss
 	docker run -d \
-	--network=mynetwork \
 	--gpus all \
-	--name topic_model_consumer_container \
+	--name topic_model_api_container \
+	--network ocss \
 	-v ~/.cache/huggingface:/root/.cache/huggingface \
 	-v ${CURDIR}:/app \
 	-e OLLAMA_IP_ADDRESS=$(IP_ADDRESS) \
-	-e RABBITMQ_HOST=rabbitmq \
+	-e RABBITMQ_HOST="sunshine.cise.ufl.edu" \
 	 topic_model_api
 
 

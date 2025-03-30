@@ -1,17 +1,23 @@
-# backend/topic/topic_model_consumer.py
-
 import json
 import os
 import pika
+import copy
 from topic_model_service import run_topic_model
+from topic_model import config as base_config  # Import the complete configuration
+import traceback
 
-# Retrieve RabbitMQ connection details from environment variables or defaults.
+# Retrieve RabbitMQ connection details.
 rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
 rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+rabbitmq_user = os.getenv('RABBITMQ_USER', 'user')
+rabbitmq_pass = os.getenv('RABBITMQ_PASS', 'password')
 
-# Set up the RabbitMQ connection and channel.
+print("Connecting to RabbitMQ at", rabbitmq_host, "with user", rabbitmq_user)
+
+# Set up the credentials and connection.
+credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
 connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host=rabbitmq_host, port=rabbitmq_port)
+    pika.ConnectionParameters(host=rabbitmq_host, port=rabbitmq_port, credentials=credentials, heartbeat=65530)
 )
 channel = connection.channel()
 
@@ -19,35 +25,49 @@ channel = connection.channel()
 queue_name = 'topic_model_queue'
 channel.queue_declare(queue=queue_name, durable=True)
 
-# Default configuration for the topic model.
-default_config = {
-    'save_dir': '/app/saved',
-    'data': '/app/full_db.pickle',
-    'random_state': 42,
-    # add other configuration parameters as needed...
-}
-
 def callback(ch, method, properties, body):
-    print("Received message: ", body)
+    print("Received message:", body)
     try:
-        # Expecting a JSON message with optional keys: data_source, output_dir
+        # Parse the JSON message.
         data = json.loads(body)
     except Exception as e:
-        print("Error decoding JSON: ", e)
+        print("Error decoding JSON:", e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
-    data_source = data.get("data_source", default_config['data'])
-    output_dir = data.get("output_dir", default_config['save_dir'])
+    # Create a deep copy of the base configuration.
+    config_copy = copy.deepcopy(base_config)
+
+    # Update the configuration with any parameters provided in the message.
+    if "data_source" in data:
+        config_copy["data_source"] = data["data_source"]
+    if "subreddit" in data:
+        config_copy["subreddit"] = data["subreddit"]
+    if "option" in data:
+        config_copy["option"] = data["option"]
+    # Also update the start and end dates.
+    if "startDate" in data:
+        config_copy["startDate"] = data["startDate"]
+    if "endDate" in data:
+        config_copy["endDate"] = data["endDate"]
+    # Optionally update other keys (e.g., save_dir, date) if provided.
+    if "save_dir" in data:
+        config_copy["save_dir"] = data["save_dir"]
+    if "date" in data:
+        config_copy["date"] = data["date"]
+
+    # Use the save_dir from the config_copy as the output directory.
+    output_dir = data.get("output_dir", config_copy["save_dir"])
 
     try:
-        result_message = run_topic_model(data_source, output_dir, default_config)
-        print("Topic modeling complete: ", result_message)
+        result_message = run_topic_model(config_copy["data_source"], output_dir, config_copy)
+        print("Topic modeling complete:", result_message)
     except Exception as e:
-        print("Error running topic model: ", e)
+        print("Error running topic model:", e)
+        print("Traceback:", traceback.format_exc())
     finally:
-        # Acknowledge that the message has been processed.
         ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
 print(" [*] Waiting for messages. To exit press CTRL+C")
 channel.basic_qos(prefetch_count=1)
