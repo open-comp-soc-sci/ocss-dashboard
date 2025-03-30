@@ -1,7 +1,9 @@
 .PHONY: yep stop
 
 yep: down build
-	docker run -d --name ollama_container --gpus "device=1" -p 11434:11434 ollama/ollama
+	-docker network create ocss
+
+	docker run -d --network ocss --name ollama_container --gpus "device=1" -p 11434:11434 ollama/ollama
 	# export $(shell grep -v '^#' .env | xargs) && \
 	# docker run -d  --gpus all \
 	# --name ollama_container \
@@ -33,7 +35,8 @@ yep: down build
 
 
 build:
-	docker build -t ollama/ollama .
+	docker pull ollama/ollama
+
 
 stop down:
 	-docker stop ollama_container && docker rm ollama_container
