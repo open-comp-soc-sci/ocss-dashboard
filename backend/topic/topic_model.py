@@ -22,6 +22,7 @@ from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 
 from umap import UMAP
+import requests
 
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -60,7 +61,7 @@ config = {
     },
     'topic_umap_params': {
         'n_neighbors': 15,
-        'n_components': 10,
+        'n_components': 7,
         'min_dist': 0.0,
         'metric': 'cosine',
         'random_state': 42
@@ -94,41 +95,69 @@ class TopicModeling():
         self.find_groups()
         self.label_groups()
         self.send_groups()
-        self.plot_topics()
+        # self.plot_topics()
         self.create_topic_table()
 
+        
     def load_data_frame(self):
         """
         Loads the Reddit posts/comments dataframe by querying the API.
-        The API endpoint is assumed to be available at http://app:5000/api/get_click.
+        
         """
-        # We now use the API rather than a static pickle file.
         if self.config.get("data_source", "pickle") == "api":
-            # Build the API URL using the hostname "app" (accessible via Docker network)
-            subreddit = self.config.get("subreddit", "default_subreddit")
+            # Get parameters from the configuration.
+            subreddit = self.config.get("subreddit")
             option = self.config.get("option", "reddit_submissions")
-            api_url = f"http://app:5000/api/get_click?subreddit={subreddit}&option={option}"
+            start_date = self.config.get("startDate", "")
+            end_date = self.config.get("endDate", "")
+            # Build the API URL and append date parameters if provided.
+            print('fetching from clickhouse')
+
+            api_url = f"http://sunshine.cise.ufl.edu:5000/api/get_all_click?subreddit={subreddit}&option={option}"
+            if start_date:
+                api_url += f"&startDate={start_date}"
+            if end_date:
+                api_url += f"&endDate={end_date}"
             try:
                 response = requests.get(api_url)
                 response.raise_for_status()
                 data = response.json()
+                # Print the first 5 records from the "data" key.
+                print(data["data"][0:5])
+                # Iterate over the actual records list.
+                # for record in data["data"]:
+                    # print(record[-1])
+
             except Exception as e:
                 raise Exception(f"Error fetching data from API: {e}")
+
+            print('done fetching from clickhouse')
             
             # Convert the JSON data into a DataFrame based on the option.
+            # For submissions:
             if option == "reddit_submissions":
-                # Expected columns: id, subreddit, title, selftext, created_utc
-                df = pd.DataFrame(data, columns=["id", "subreddit", "title", "selftext", "created_utc"])
-                # Rename selftext to body to match downstream processing.
+                df = pd.DataFrame(data["data"], columns=["id", "subreddit", "title", "selftext", "created_utc"])
                 df = df.rename(columns={"selftext": "body"})
             elif option == "reddit_comments":
-                # Expected columns: id, parent_id, subreddit, body, created_utc
-                df = pd.DataFrame(data, columns=["id", "parent_id", "subreddit", "body", "created_utc"])
+                df = pd.DataFrame(data["data"], columns=["subreddit", "title", "body", "created_utc", "id"])
+                # df = pd.DataFrame(data["data"], columns=["id", "parent_id", "subreddit", "body", "created_utc"])
+
             else:
                 raise ValueError(f"Invalid option provided: {option}")
 
+
+            print('!')
+            print(df.head().to_string())
+            print(":__)")
             self.df = self.preprocess_dataframe(df)
             self.texts = self.df['body'].tolist()
+
+            print(self.df.to_string())
+            print(len(self.df))
+            print("************")
+
+            print('hello')
+            print(self.df['created_utc'].unique())
         else:
             # Fallback if data_source is not "api". (Legacy support for pickle files.)
             if self.config['data'].split('.')[-1] != 'pickle':
@@ -136,6 +165,7 @@ class TopicModeling():
             df = pd.read_pickle(self.config['data'])
             self.df = self.preprocess_dataframe(df)
             self.texts = self.df['body'].tolist()
+
 
     @staticmethod
     def preprocess_dataframe(df):
@@ -241,24 +271,24 @@ class TopicModeling():
         return ideal_n_clusters
 
         def plot_topics(self):
-        with sns.plotting_context('notebook'):
-            sns.set_style('white')
-            plt.figure(figsize=(10, 5))
-            vis_arr = self.c_tf_idf_vis
-            n_clusters = self.groups.max() - self.groups.min() + 1
-            ax = sns.scatterplot(x=vis_arr[:, 0], y=vis_arr[:, 1],
-                                 size=self.topic_model.get_topic_info()['Count'],
-                                 hue=self.groups,
-                                 sizes=(100, 5000),
-                                 alpha=0.5, palette='tab20', legend=True, edgecolor='k')
-            h, l = ax.get_legend_handles_labels()
-            plt.legend(h[0:n_clusters], l[0:n_clusters], bbox_to_anchor=(-0.011, -1.95), loc='lower left', borderaxespad=1, fontsize=10)
-            ax.set_title('Topics, Grouped by Similarity of Content', fontsize=16, pad=10)
-            ax.set_xlabel('Feature 1')
-            ax.set_ylabel('Feature 2')
-            ax.set_xticklabels([])
-            ax.set_yticklabels([])
-            ax.figure.savefig(f'{self.config["save_dir"]}/figure_topics_bydisc.png', dpi=300, bbox_inches="tight")
+            with sns.plotting_context('notebook'):
+                sns.set_style('white')
+                plt.figure(figsize=(10, 5))
+                vis_arr = self.c_tf_idf_vis
+                n_clusters = self.groups.max() - self.groups.min() + 1
+                ax = sns.scatterplot(x=vis_arr[:, 0], y=vis_arr[:, 1],
+                                    size=self.topic_model.get_topic_info()['Count'],
+                                    hue=self.groups,
+                                    sizes=(100, 5000),
+                                    alpha=0.5, palette='tab20', legend=True, edgecolor='k')
+                h, l = ax.get_legend_handles_labels()
+                plt.legend(h[0:n_clusters], l[0:n_clusters], bbox_to_anchor=(-0.011, -1.95), loc='lower left', borderaxespad=1, fontsize=10)
+                ax.set_title('Topics, Grouped by Similarity of Content', fontsize=16, pad=10)
+                ax.set_xlabel('Feature 1')
+                ax.set_ylabel('Feature 2')
+                ax.set_xticklabels([])
+                ax.set_yticklabels([])
+                ax.figure.savefig(f'{self.config["save_dir"]}/figure_topics_bydisc.png', dpi=300, bbox_inches="tight")
 
     def create_topic_table(self):
         df, topics, embeddings = self.df, self.topics, self.embeddings
@@ -292,7 +322,8 @@ class TopicModeling():
         topic_table.to_excel(f'{self.config["save_dir"]}/topic_table.xlsx')
 
     def send_groups(self):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq", port=5672))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="sunshine.cise.ufl.edu", port=5672, 
+            credentials=pika.PlainCredentials("user", "password")))
         channel = connection.channel()
         channel.queue_declare(queue="grouping_results", durable=True)
         groups = self.groups
@@ -316,7 +347,7 @@ class TopicLabeling():
         self.topic_model = topic_model
         self.config = config
 
-        self.llm = Ollama(model="gemma2:27b", base_url=f"http://{OLLAMA_IP}:11434")
+        self.llm = Ollama(model="gemma2:27b", base_url=f"http://ollama_container:11434")
 
         self.topic_representations = self.find_topic_representations()
 
@@ -525,7 +556,7 @@ class GroupLabeling():
     
     def finalize_group_labels_with_llm(self):
         labels = {}
-        llm = Ollama(model="gemma2:27b", base_url=f"http://{OLLAMA_IP}:11434", temperature=0.1)
+        llm = Ollama(model="gemma2:27b", base_url=f"http://ollama_container:11434", temperature=0.1)
         pattern = r"(?<=Group Label: )(.*)"
         
         for group, prompt in tqdm(self.group_prompts.items()):

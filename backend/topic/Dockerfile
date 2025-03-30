@@ -18,4 +18,4 @@ COPY . /app/
 EXPOSE 5001
 
 # Set the default command to run the consumer
-CMD ["python3", "topic_model_consumer.py"]
+CMD ["python3", "-u", "topic_model_consumer.py"]
