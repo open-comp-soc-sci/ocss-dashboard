@@ -1,7 +1,6 @@
-from flask import Blueprint, jsonify, request
+from flask import jsonify, request
 from clickhouse_connect import get_client
 from dotenv import load_dotenv
-import threading
 from queue import Queue
 import os
 import json
@@ -11,7 +10,7 @@ from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
 
 load_dotenv()
 
-#Currently set the group size, increase later.
+#Currently set to 5, increase later.
 POOL_SIZE = 5 
 connection_pool = Queue(maxsize=POOL_SIZE)
 
