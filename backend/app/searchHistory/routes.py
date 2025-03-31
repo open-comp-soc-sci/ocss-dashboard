@@ -47,7 +47,7 @@ def getSearch(email):
         ]
         return jsonify({"search_history": search_form}), 200
     else:
-        return jsonify({"message": "Search history empty."}), 404
+        return jsonify({"search_history": []}), 200
 
 @searchHistory_BP.route("/api/remove_search/<int:search_id>", methods=['DELETE'])
 def removeSearch(search_id):
