@@ -239,6 +239,10 @@ function Data() {
       setStartDate(startDate);
       setEndDate(endDate);
       fetchData(0, 10, 1, searchValue);
+      tableInitializedRef.current = true;
+      if ($.fn.DataTable.isDataTable("#click-table")) {
+        $("#click-table").DataTable().ajax.reload();
+      }
     });
 
     $("#clear-all-btn").on("click", ClearAllSearch);
