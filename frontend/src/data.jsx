@@ -26,13 +26,11 @@ function Data() {
     const fetchSearchHistory = async () => {
       try {
         const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-        if (!response.ok) throw new Error('Backend Fetch Failed');
+        if (!response.ok) throw new Error('Search History Fetch Failed');
         const data = await response.json();
         setSearchData(data.search_history || []);
       } catch (error) {
-        if (error.message !== 'Backend Fetch Failed') {
-          setError(error.message);
-        }
+        setError(error.message);
       }
     };
     fetchSearchHistory();
@@ -64,6 +62,189 @@ function Data() {
     }
   };
 
+  const [isDeleting, setIsDeleting] = useState(false);
+  const historyInitializedRef = useRef(false);
+
+  const RemoveSearch = async (searchId) => {
+    try {
+      setSearchData((prevData) => prevData.filter((item) => item.id !== searchId));
+      setIsDeleting(true);
+
+      const response = await fetch(`/api/remove_search/${searchId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn(`Search with ID ${searchId} not found or already deleted.`);
+        }
+        throw new Error(`Failed to remove search ${searchId}`);
+      }
+
+      console.log(`Search ID ${searchId} successfully removed from backend.`);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
+      if (!response.ok) throw new Error('Failed to fetch updated search history');
+
+      const data = await response.json();
+      setSearchData(data.search_history || []);
+      setIsDeleting(false);
+    }
+  };
+
+  const ClearAllSearch = async () => {
+    const button = document.getElementById("clear-all-btn");
+
+    try {
+      button.disabled = true;
+      setIsDeleting(true);
+      const response = await fetch(`/api/clear_all/${encodeURIComponent(email)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error("Failed to clear all searches");
+
+      setSearchData([]);
+    } catch (error) {
+    } finally {
+      const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
+      if (!response.ok) throw new Error('Failed to fetch updated search history');
+
+      const data = await response.json();
+      setSearchData(data.search_history || []);
+      setIsDeleting(false);
+      button.disabled = false;
+    }
+  };
+
+  // Initialize search history DataTable when searchData changes.
+  useEffect(() => {
+    if (!searchData.length) {
+      if ($.fn.DataTable.isDataTable("#search-history-table")) {
+        $("#search-history-table").DataTable().clear().draw();
+      } else {
+        $("#search-history-table").DataTable({
+          data: [],
+          columns: [
+            { data: "subreddit", title: "Subreddit" },
+            { data: "sentimentKeywords", title: "Keywords" },
+            {
+              data: "startDate",
+              title: "Start Date",
+              render: function (data) {
+                return new Date(data).toLocaleDateString('en-US');
+              }
+            },
+            {
+              data: "endDate",
+              title: "End Date",
+              render: function (data) {
+                return new Date(data).toLocaleDateString('en-US');
+              }
+            },
+            { data: "created_utc", title: "Created Date" },
+            {
+              data: null,
+              title: "Actions",
+              render: function (data, type, row) {
+                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" disabled>Go To Search</a>`;
+                const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}" disabled>Delete</button>`;
+                return searchButton + " " + deleteButton;
+              }
+            }
+          ],
+          paging: false,
+          searching: false,
+          ordering: false,
+          info: false,
+          autoWidth: false,
+          language: {
+            emptyTable: "No search history available."
+          },
+          dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+            "<'row'<'col-sm-12'tr>>" +
+            "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+        });
+      }
+      return;
+    }
+
+    if ($.fn.DataTable.isDataTable("#search-history-table")) {
+      $("#search-history-table").DataTable().destroy();
+    }
+
+    $("#search-history-table").DataTable({
+      data: searchData,
+      columns: [
+        { data: "subreddit", title: "Subreddit" },
+        { data: "sentimentKeywords", title: "Keywords" },
+        {
+          data: "startDate",
+          title: "Start Date",
+          render: function (data) {
+            return new Date(data).toLocaleDateString('en-US');
+          }
+        },
+        {
+          data: "endDate",
+          title: "End Date",
+          render: function (data) {
+            return new Date(data).toLocaleDateString('en-US');
+          }
+        },
+        { data: "created_utc", title: "Created Date" },
+        {
+          data: null,
+          title: "Actions",
+          render: function (data, type, row) {
+            const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}">Go To Search</a>`;
+            const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}">Delete</button>`;
+            return searchButton + " " + deleteButton;
+          }
+        }
+      ],
+      paging: true,
+      searching: false,
+      ordering: true,
+      info: true,
+      autoWidth: false,
+      language: {
+        emptyTable: "No search history available."
+      },
+      dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+        "<'row'<'col-sm-12'tr>>" +
+        "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+    });
+
+    if (!historyInitializedRef.current) {
+      historyInitializedRef.current = true;
+
+      $(document).on("click", ".delete-btn", function () {
+        const searchId = $(this).data("search-id");
+        RemoveSearch(searchId);
+      });
+    }
+
+    $(document).on("click", ".go-to-btn", function () {
+      const subreddit = $(this).data("subreddit").replace(/^r\//, '');
+      const sentiment = $(this).data("sentiment");
+      const startDate = new Date($(this).data("start-date"));
+      const endDate = new Date($(this).data("end-date"));
+      const searchValue = `${subreddit} ${sentiment} ${startDate.toISOString()} ${endDate.toISOString()}`;
+
+      setSubreddit(subreddit);
+      setSentimentKeywords(sentiment);
+      setStartDate(startDate);
+      setEndDate(endDate);
+      fetchData(0, 10, 1, searchValue);
+    });
+
+    $("#clear-all-btn").on("click", ClearAllSearch);
+
+  }, [searchData]);
+
   const handleKeywordKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -79,36 +260,35 @@ function Data() {
     setSearchTerms(searchTerms.filter(t => t !== term));
   };
 
+  const fetchData = async (start, length, draw, searchValue) => {
+    try {
+      const response = await fetch(
+        `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
+        `&subreddit=${encodeURIComponent(subreddit)}` +
+        `&option=${encodeURIComponent(selectedOption)}` +
+        `&search_value=${encodeURIComponent(searchValue)}` +
+        `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
+        `&startDate=${encodeURIComponent(startDate.toISOString())}` +
+        `&endDate=${encodeURIComponent(endDate.toISOString())}`
+      );
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
   // Initialize main results DataTable on mount or when dependencies change.
   useEffect(() => {
-    const fetchData = async (start, length, draw, searchValue) => {
-      try {
-        const response = await fetch(
-          `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
-          `&subreddit=${encodeURIComponent(subreddit)}` +
-          `&option=${encodeURIComponent(selectedOption)}` +
-          `&search_value=${encodeURIComponent(searchValue)}` +
-          `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
-          `&startDate=${encodeURIComponent(startDate.toISOString())}` +
-          `&endDate=${encodeURIComponent(endDate.toISOString())}`
-        );
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-
     const initDataTable = () => {
       $("#click-table").DataTable({
         processing: true,
         serverSide: true,
         paging: true,
         pagingType: "full_numbers",
-        // Remove the built-in search field from the dom and disable searching.
         dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
-             "<'row'<'col-sm-12'tr>>" +
-             "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+          "<'row'<'col-sm-12'tr>>" +
+          "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
         searching: false,
         ajax: function (data, callback, settings) {
           if (!tableInitializedRef.current) {
@@ -188,7 +368,7 @@ function Data() {
           }
         }
       });
-  
+
       $("#goToPageButton").on("click", function () {
         const page = parseInt($("#pageInput").val(), 10) - 1;
         if (!isNaN(page) && page >= 0) {
@@ -244,48 +424,6 @@ function Data() {
       setLoadingSentiment(false);
     }
   };
-
-  // Initialize search history DataTable when searchData changes.
-  useEffect(() => {
-    if (searchData.length > 0) {
-      if ($.fn.DataTable.isDataTable("#search-history-table")) {
-        $("#search-history-table").DataTable().destroy();
-      }
-      $("#search-history-table").DataTable({
-        data: searchData,
-        columns: [
-          { data: "subreddit", title: "Subreddit" },
-          { data: "sentimentKeywords", title: "Keywords" },
-          { 
-            data: "startDate", 
-            title: "Start Date",
-            render: function(data) {
-              return new Date(data).toLocaleDateString('en-US');
-            }
-          },
-          { 
-            data: "endDate", 
-            title: "End Date",
-            render: function(data) {
-              return new Date(data).toLocaleDateString('en-US');
-            }
-          },
-          { data: "created_utc", title: "Created Date" }
-        ],
-        paging: true,
-        searching: false,
-        ordering: true,
-        info: true,
-        autoWidth: false,
-        language: {
-          emptyTable: "No search history available."
-        },
-        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
-             "<'row'<'col-sm-12'tr>>" +
-             "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
-      });
-    }
-  }, [searchData]);
 
   return (
     <div className="container mt-5">
@@ -463,15 +601,18 @@ function Data() {
       {/* Search History DataTable */}
       <div className="mt-5">
         <h2>Search History</h2>
+        <div id="clear-all-container" style={{ position: 'relative' }}>
+          <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', top: '10px', right: '150px' }}>Clear All Searches</button>
+        </div>
         <div>
           <table id="search-history-table" className="display">
             <thead>
               <tr>
-                <th>Subreddit</th>
-                <th>Keywords</th>
-                <th>Start Date</th>
-                <th>End Date</th>
-                <th>Created Date</th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
               </tr>
             </thead>
             <tbody></tbody>
