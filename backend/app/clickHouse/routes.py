@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request
+from flask import jsonify, request
 from clickhouse_connect import get_client
 from dotenv import load_dotenv
+from queue import Queue
 import os
 import json
 import pika
@@ -8,6 +9,10 @@ from . import clickHouse_BP
 from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
 
 load_dotenv()
+
+#Currently set to 5, increase later.
+POOL_SIZE = 5 
+connection_pool = Queue(maxsize=POOL_SIZE)
 
 def get_new_client():
     return get_client(
@@ -17,6 +22,19 @@ def get_new_client():
         username=os.getenv('CH_USER'),
         password=os.getenv('CH_PASSWORD')
     )
+
+for _ in range(POOL_SIZE):
+    connection_pool.put(get_new_client())
+
+def get_pooled_client():
+    try:
+        return connection_pool.get(timeout=5)  
+    except:
+        raise Exception("No ClickHouse connections are available.")
+
+def release_client(client):
+    connection_pool.put(client)
+
 
 @clickHouse_BP.route("/api/get_click", methods=["GET"])
 def get_click():
@@ -28,7 +46,7 @@ def get_click():
 
     print('hello')
     print(subreddit)
-    client = get_new_client()
+    client = get_pooled_client()
 
     try:
         # Build a date condition if dates are provided.
@@ -65,6 +83,8 @@ def get_click():
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        release_client(client)
 
 @clickHouse_BP.route("/api/get_all_click", methods=["GET"])
 def get_all_click():
@@ -74,7 +94,7 @@ def get_all_click():
         draw = request.args.get('draw', default=1, type=int)
         option = request.args.get('option', default='reddit_submissions')
         subreddit = request.args.get('subreddit', '', type=str)
-        client = get_new_client()
+        client = get_pooled_client()
         search_value = request.args.get('search[value]', '', type=str)
         sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
         # Get datetime range from the query parameters (ISO strings)
@@ -142,6 +162,8 @@ def get_all_click():
     except Exception as e:
         print(e, flush=True)
         return jsonify({"error": str(e)}), 500
+    finally:
+        release_client(client)
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
