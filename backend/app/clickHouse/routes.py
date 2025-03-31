@@ -35,57 +35,6 @@ def get_pooled_client():
 def release_client(client):
     connection_pool.put(client)
 
-
-@clickHouse_BP.route("/api/get_click", methods=["GET"])
-def get_click():
-    subreddit = request.args.get('subreddit', None)
-    option = request.args.get('option', 'reddit_submissions')
-    # Optionally, get date range (if needed in this endpoint)
-    start_date = request.args.get('startDate', None)
-    end_date = request.args.get('endDate', None)
-
-    print('hello')
-    print(subreddit)
-    client = get_pooled_client()
-
-    try:
-        # Build a date condition if dates are provided.
-        date_conditions = []
-        if start_date:
-            # Convert ISO date (e.g. "2024-10-01T23:00:00.000Z") to "YYYY-MM-DD HH:MM:SS"
-            start_date_formatted = start_date.replace("T", " ").split(".")[0]
-            date_conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
-        if end_date:
-            end_date_formatted = end_date.replace("T", " ").split(".")[0]
-            date_conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
-        date_clause = ""
-        if date_conditions:
-            date_clause = " AND " + " AND ".join(date_conditions)
-            
-        if option == "reddit_submissions":
-            query = (
-                f"SELECT id, subreddit, title, selftext, created_utc "
-                f"FROM reddit_submissions WHERE subreddit = '{subreddit}'{date_clause} "
-                f"ORDER BY created_utc DESC LIMIT 10;"
-            )
-        elif option == "reddit_comments":
-            query = (
-                f"SELECT id, parent_id, subreddit, body, created_utc "
-                f"FROM reddit_comments WHERE subreddit = '{subreddit}'{date_clause} "
-                f"ORDER BY created_utc DESC LIMIT 10;"
-            )
-        else:
-            return jsonify({"error": "Invalid option provided."}), 400
-
-        result = client.query(query)
-        data = result.result_rows
-        return jsonify(data)
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        release_client(client)
-
 @clickHouse_BP.route("/api/get_all_click", methods=["GET"])
 def get_all_click():
     try:
@@ -105,7 +54,7 @@ def get_all_click():
         if option == "reddit_submissions":
             base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
         elif option == "reddit_comments":
-            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, id FROM reddit_comments"
+            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
         else:
             return jsonify({"error": "Invalid option provided."}), 400
 
