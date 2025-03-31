@@ -123,7 +123,7 @@ class TopicModeling():
                 response.raise_for_status()
                 data = response.json()
                 # Print the first 5 records from the "data" key.
-                print(data["data"][0:5])
+                # print(data["data"][0:5])
                 # Iterate over the actual records list.
                 # for record in data["data"]:
                     # print(record[-1])
@@ -146,15 +146,15 @@ class TopicModeling():
                 raise ValueError(f"Invalid option provided: {option}")
 
 
-            print('!')
-            print(df.head().to_string())
-            print(":__)")
+            # print('!')
+            # print(df.head().to_string())
+            # print(":__)")
             self.df = self.preprocess_dataframe(df)
             self.texts = self.df['body'].tolist()
 
-            print(self.df.to_string())
-            print(len(self.df))
-            print("************")
+            # print(self.df.to_string())
+            # print(len(self.df))
+            # print("************")
 
             print('hello')
             print(self.df['created_utc'].unique())
@@ -322,12 +322,27 @@ class TopicModeling():
         topic_table.to_excel(f'{self.config["save_dir"]}/topic_table.xlsx')
 
     def send_groups(self):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="sunshine.cise.ufl.edu", port=5672, 
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="sunshine.cise.ufl.edu", port=5672,
             credentials=pika.PlainCredentials("user", "password")))
         channel = connection.channel()
         channel.queue_declare(queue="grouping_results", durable=True)
-        groups = self.groups
-        message = json.dumps(groups.tolist())
+        
+        # Build a dictionary that includes group details.
+        group_data = {}
+        for idx, group in enumerate(self.groups):
+            # Convert the group key to a native int
+            group_key = int(group)
+            topic_label = self.topic_labeler.topic_labels.get(idx, "No label")
+            if group_key not in group_data:
+                group_data[group_key] = []
+            group_data[group_key].append({
+                "topic_index": int(idx),  # Also convert idx if necessary
+                "topic_label": topic_label,
+                # You could add more details here, such as representative docs or counts.
+            })
+
+        message = json.dumps(group_data)
+
         channel.basic_publish(
             exchange="",
             routing_key="grouping_results",
@@ -518,7 +533,8 @@ class GroupLabeling():
 
     def __init__(self, topics, topic_labels, groups):
         self.topics = topics
-
+        self.groups = groups              # <-- Store groups
+        self.topic_labels = topic_labels  # <-- Store topic labels
         self.create_group_labels(groups, topic_labels)
         self.prepare_prompts_for_group_labeling()
         self.finalize_group_labels_with_llm()

@@ -15,15 +15,17 @@ def run_topic_model(data_source, output_dir, config):
     Returns:
       A result message indicating where the outputs were saved.
     """
-    # Set up your configuration
+    # Update configuration.
     config['output'] = output_dir
     if data_source == 'api':
         config['data_source'] = 'api'
     else:
         config['data'] = data_source
 
-    # Instantiate and run the topic modeling process
+    # Instantiate and run the topic modeling process.
     topic_model = TopicModeling(config)
     topic_model.run()
     
-    return f"Topic modeling complete. Output saved to {output_dir}"
+    # Instead of returning a generic message, return the detailed grouping results.
+    group_listing = topic_model.group_labeler.create_topic_group_listing()
+    return group_listing
