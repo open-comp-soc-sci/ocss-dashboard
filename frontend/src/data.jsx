@@ -149,7 +149,9 @@ function Data() {
               data: null,
               title: "Actions",
               render: function (data, type, row) {
-                return `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}" disabled>Delete</button>`;
+                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" disabled>Go To Search</a>`;
+                const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}" disabled>Delete</button>`;
+                return searchButton + " " + deleteButton;
               }
             }
           ],
@@ -197,7 +199,9 @@ function Data() {
           data: null,
           title: "Actions",
           render: function (data, type, row) {
-            return `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}">Delete</button>`;
+            const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}">Go To Search</a>`;
+            const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}">Delete</button>`;
+            return searchButton + " " + deleteButton;
           }
         }
       ],
@@ -223,6 +227,20 @@ function Data() {
       });
     }
 
+    $(document).on("click", ".go-to-btn", function () {
+      const subreddit = $(this).data("subreddit").replace(/^r\//, '');
+      const sentiment = $(this).data("sentiment");
+      const startDate = new Date($(this).data("start-date"));
+      const endDate = new Date($(this).data("end-date"));
+      const searchValue = `${subreddit} ${sentiment} ${startDate.toISOString()} ${endDate.toISOString()}`;
+
+      setSubreddit(subreddit);
+      setSentimentKeywords(sentiment);
+      setStartDate(startDate);
+      setEndDate(endDate);
+      fetchData(0, 10, 1, searchValue);
+    });
+
     $("#clear-all-btn").on("click", ClearAllSearch);
 
   }, [searchData]);
@@ -242,26 +260,26 @@ function Data() {
     setSearchTerms(searchTerms.filter(t => t !== term));
   };
 
+  const fetchData = async (start, length, draw, searchValue) => {
+    try {
+      const response = await fetch(
+        `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
+        `&subreddit=${encodeURIComponent(subreddit)}` +
+        `&option=${encodeURIComponent(selectedOption)}` +
+        `&search_value=${encodeURIComponent(searchValue)}` +
+        `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
+        `&startDate=${encodeURIComponent(startDate.toISOString())}` +
+        `&endDate=${encodeURIComponent(endDate.toISOString())}`
+      );
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
   // Initialize main results DataTable on mount or when dependencies change.
   useEffect(() => {
-    const fetchData = async (start, length, draw, searchValue) => {
-      try {
-        const response = await fetch(
-          `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
-          `&subreddit=${encodeURIComponent(subreddit)}` +
-          `&option=${encodeURIComponent(selectedOption)}` +
-          `&search_value=${encodeURIComponent(searchValue)}` +
-          `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
-          `&startDate=${encodeURIComponent(startDate.toISOString())}` +
-          `&endDate=${encodeURIComponent(endDate.toISOString())}`
-        );
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-
     const initDataTable = () => {
       $("#click-table").DataTable({
         processing: true,
