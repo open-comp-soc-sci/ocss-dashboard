@@ -286,7 +286,6 @@ function Data() {
         serverSide: true,
         paging: true,
         pagingType: "full_numbers",
-        // Remove the built-in search field from the dom and disable searching.
         dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
           "<'row'<'col-sm-12'tr>>" +
           "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
@@ -602,8 +601,8 @@ function Data() {
       {/* Search History DataTable */}
       <div className="mt-5">
         <h2>Search History</h2>
-        <div id="clear-all-container">
-          <button id="clear-all-btn" class="btn btn-danger">Clear All Searches</button>
+        <div id="clear-all-container" style={{ position: 'relative' }}>
+          <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', top: '10px', right: '150px' }}>Clear All Searches</button>
         </div>
         <div>
           <table id="search-history-table" className="display">
