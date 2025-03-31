@@ -94,6 +94,31 @@ function Data() {
     }
   };
 
+  const ClearAllSearch = async () => {
+    const button = document.getElementById("clear-all-btn");
+
+    try {
+      button.disabled = true;
+      setIsDeleting(true);
+      const response = await fetch(`/api/clear_all/${encodeURIComponent(email)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error("Failed to clear all searches");
+
+      setSearchData([]);
+    } catch (error) {
+    } finally {
+      const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
+      if (!response.ok) throw new Error('Failed to fetch updated search history');
+
+      const data = await response.json();
+      setSearchData(data.search_history || []);
+      setIsDeleting(false);
+      button.disabled = false;
+    }
+  };
+
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
     if (!searchData.length) {
@@ -197,6 +222,8 @@ function Data() {
         RemoveSearch(searchId);
       });
     }
+
+    $("#clear-all-btn").on("click", ClearAllSearch);
 
   }, [searchData]);
 
@@ -557,6 +584,9 @@ function Data() {
       {/* Search History DataTable */}
       <div className="mt-5">
         <h2>Search History</h2>
+        <div id="clear-all-container">
+          <button id="clear-all-btn" class="btn btn-danger">Clear All Searches</button>
+        </div>
         <div>
           <table id="search-history-table" className="display">
             <thead>
