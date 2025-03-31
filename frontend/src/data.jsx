@@ -4,6 +4,15 @@ import 'react-datepicker/dist/react-datepicker.css';
 import $ from 'jquery';
 import 'datatables.net-bs5';
 
+import 'datatables.net';
+import 'datatables.net-buttons';
+import JSZip from 'jszip';
+import pdfMake from 'pdfmake';
+import 'pdfmake/build/vfs_fonts.js';
+import 'datatables.net-buttons/js/buttons.html5.min';
+import 'datatables.net-buttons/js/buttons.print.min';
+
+
 function Data() {
   const [subreddit, setSubreddit] = useState('survivor');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
@@ -121,6 +130,12 @@ function Data() {
 
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
+    if (searchData.length === 0) {
+      document.getElementById("clear-all-container").style.display = 'none';
+    } else {
+      document.getElementById("clear-all-container").style.display = 'block';
+    }
+
     if (!searchData.length) {
       if ($.fn.DataTable.isDataTable("#search-history-table")) {
         $("#search-history-table").DataTable().clear().draw();
@@ -243,6 +258,8 @@ function Data() {
       if ($.fn.DataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().ajax.reload();
       }
+
+      //Do we want sentiment analysis run at the same time or allow the user to select it instead.
     });
 
     $("#clear-all-btn").on("click", ClearAllSearch);
@@ -290,7 +307,7 @@ function Data() {
         serverSide: true,
         paging: true,
         pagingType: "full_numbers",
-        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
+        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'B>>" +
           "<'row'<'col-sm-12'tr>>" +
           "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
         searching: false,
@@ -362,7 +379,46 @@ function Data() {
             }
           }
         ],
-        buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
+        buttons: [
+          {
+            extend: 'excelHtml5',
+            title: 'Table Export',
+            exportOptions: {
+              columns: ':visible'
+            },
+          },
+          {
+            extend: 'pdfHtml5',
+            title: 'Table Export',
+            orientation: 'landscape',
+            pageSize: 'LEGAL',
+            exportOptions: {
+              columns: ':visible'
+            },
+          },
+          {
+            extend: 'copy',
+          },
+          {
+            extend: 'csv',
+          },
+          {
+            extend: 'print',
+          }
+        ],
+        drawCallback: function() {
+          var api = this.api();
+          if (api.rows({ filter: 'applied' }).count() === 0) {
+            api.buttons().container().hide();
+          } else {
+            api.buttons().container().show();
+          }
+
+          //fix styling of buttons, match other buttons, align right of data table
+          api.buttons().container().find('button').each(function() {
+            $(this).addClass('btn btn-danger');
+          });
+        },
         language: {
           paginate: {
             first: "<<",
