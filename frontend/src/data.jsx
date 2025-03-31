@@ -237,13 +237,17 @@ function Data() {
       });
       if (!response.ok) throw new Error("Sentiment analysis failed.");
       const resultData = await response.json();
+      // Display detailed grouping results in a pop-up.
+      window.alert("Topic Modeling Results:\n" + JSON.stringify(resultData.result, null, 2));
+      // Optionally update state to render results in the UI.
       setSentimentResults(resultData.result);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoadingSentiment(false);
     }
-  };
+  };  
+  
 
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
