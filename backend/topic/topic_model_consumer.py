@@ -45,12 +45,10 @@ def callback(ch, method, properties, body):
         config_copy["subreddit"] = data["subreddit"]
     if "option" in data:
         config_copy["option"] = data["option"]
-    # Also update the start and end dates.
     if "startDate" in data:
         config_copy["startDate"] = data["startDate"]
     if "endDate" in data:
         config_copy["endDate"] = data["endDate"]
-    # Optionally update other keys (e.g., save_dir, date) if provided.
     if "save_dir" in data:
         config_copy["save_dir"] = data["save_dir"]
     if "date" in data:
@@ -62,11 +60,21 @@ def callback(ch, method, properties, body):
     try:
         result_message = run_topic_model(config_copy["data_source"], output_dir, config_copy)
         print("Topic modeling complete:", result_message)
+
+        # Publish the reply to the callback queue specified in properties.reply_to
+        response_body = json.dumps({"result": result_message})
+        ch.basic_publish(
+            exchange='',
+            routing_key=properties.reply_to,  # send reply to the callback queue
+            properties=pika.BasicProperties(correlation_id=properties.correlation_id),
+            body=response_body
+        )
     except Exception as e:
         print("Error running topic model:", e)
         print("Traceback:", traceback.format_exc())
     finally:
         ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
 
 print(" [*] Waiting for messages. To exit press CTRL+C")
