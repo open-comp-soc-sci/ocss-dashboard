@@ -331,7 +331,8 @@ function Data() {
                 recordsFiltered: apiData.recordsFiltered,
                 data: apiData.data.map(row => ({
                   subreddit: row[0],
-                  title: row[1],
+                  //See if we can grab the post title from the post link potentially, if it doesnt slow down performance
+                  title: selectedOption === "reddit_comments" ? "(Comment)" : row[1],
                   selftext: row[2],
                   created_utc: row[3],
                   id: row[4],
@@ -371,6 +372,10 @@ function Data() {
         deferRender: true,
         responsive: true,
         autoWidth: false,
+        //adds extra row of column headers, cant remove currently
+        //scrollY: '600px',
+        //scrollCollapse: true,
+        //scroller: true,
         columnDefs: [
           {
             targets: '_all',
@@ -406,7 +411,7 @@ function Data() {
             extend: 'print',
           }
         ],
-        drawCallback: function() {
+        drawCallback: function () {
           var api = this.api();
           if (api.rows({ filter: 'applied' }).count() === 0) {
             api.buttons().container().hide();
@@ -415,7 +420,7 @@ function Data() {
           }
 
           //fix styling of buttons, match other buttons, align right of data table
-          api.buttons().container().find('button').each(function() {
+          api.buttons().container().find('button').each(function () {
             $(this).addClass('btn btn-danger');
           });
         },
@@ -486,8 +491,8 @@ function Data() {
     } finally {
       setLoadingSentiment(false);
     }
-  };  
-  
+  };
+
 
   return (
     <div className="container mt-5">
@@ -666,7 +671,7 @@ function Data() {
       <div className="mt-5">
         <h2>Search History</h2>
         <div id="clear-all-container" style={{ position: 'relative' }}>
-          <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', top: '10px', right: '150px' }}>Clear All Searches</button>
+          <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', right: '150px' }}>Clear All Searches</button>
         </div>
         <div>
           <table id="search-history-table" className="display">
