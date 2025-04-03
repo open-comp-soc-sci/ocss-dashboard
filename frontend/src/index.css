@@ -1,0 +1,7 @@
+div.dt-length > select#dt-length-1,
+div.dt-length > select#dt-length-2 {
+  width: 80px !important;
+  max-width: 80px !important;
+  min-width: 80px !important;
+  display: inline-block;
+}

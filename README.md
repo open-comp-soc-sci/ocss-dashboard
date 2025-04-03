@@ -25,3 +25,24 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=fillMeOut
 VITE_FIREBASE_APP_ID=fillMeOut
 VITE_FIREBASE_MEASUREMENT_ID=fillMeOut
 ```
+
+Which computers to use?
+
+typically any computer should be able to run the 
+backend + db + frontend + rabbit, that is done using docker compose.
+
+```bash
+make
+```
+
+However, we need another computer with a strong enough GPU that
+can host Ollama.
+
+```bash
+cd backend/llama
+make
+cd ../topic
+make
+```
+
+Clickhouse instructions not listed here yet, but can be found in torrent folder.
