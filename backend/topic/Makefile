@@ -1,12 +1,9 @@
 IP_ADDRESS := $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ollama_container)
 
-.PHONY: download first stop down logs build run
+.PHONY: first stop down logs build run
 
 # First-time setup
 first: stop
-	@if [ ! -f posts.jsonl ] || [ ! -f comments.jsonl ]; then \
-		$(MAKE) download; \
-	fi
 	$(MAKE) build
 	$(MAKE) run
 	$(MAKE) logs
@@ -14,17 +11,19 @@ first: stop
 # Build Docker Image
 build:
 	
-	docker build -t topicmodelfrozen .
+	docker build -t topic_model_api .
 
 run:
+	-docker network create ocss
 	docker run -d \
-	--network=mynetwork \
 	--gpus all \
-	--name topicmodelfrozen_container \
+	--name topic_model_api_container \
+	--network ocss \
 	-v ~/.cache/huggingface:/root/.cache/huggingface \
 	-v ${CURDIR}:/app \
 	-e OLLAMA_IP_ADDRESS=$(IP_ADDRESS) \
-	topicmodelfrozen python3 topic_model.py /app/full_db.pickle /app/output/
+	-e RABBITMQ_HOST="sunshine.cise.ufl.edu" \
+	 topic_model_api
 
 
 
@@ -39,15 +38,15 @@ download:
 
 # Stop the container
 stop:
-	-docker stop topicmodelfrozen_container && docker rm topicmodelfrozen_container
+	-docker stop topic_model_api_container && docker rm topic_model_api_container
 
 # Stop and remove all associated data
 down: stop
-	-docker rmi topicmodelfrozen
+	-docker rmi topic_model_api
 
 # View logs
 logs:
-	docker logs -f topicmodelfrozen_container
+	docker logs -f topic_model_api_container
 
 shell:
-	docker exec -it topicmodelfrozen_container /bin/bash
+	docker exec -it topic_model_api_container /bin/bash
