@@ -2,6 +2,7 @@ you may find that p2p activity is not alllowed on school network
 
 we torrented at home and then brought it over driving to campus and connecting a drive from home
 
+```bash
 $ du -sh RC_2024-01.zst
 32G     RC_2024-01.zst
 (ENV3) mycpu:~/ocss/reddit/comments$ du -sh RC_2024-02.zst
@@ -20,6 +21,7 @@ $ du -sh db_data # put into clickhouse
 54G
 72G
 90G
+```
 
 steps:
 
