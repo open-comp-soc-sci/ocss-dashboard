@@ -43,6 +43,14 @@ services:
     depends_on:
       - rabbitmq
     restart: always
+
+  robertamodel:
+    build: ./robertamodel
+    container_name: robertamodel
+    depends_on:
+      - rabbitmq
+    restart: always
+
 volumes:
   db_users:
 
