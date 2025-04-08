@@ -17,11 +17,14 @@ from sentence_transformers import SentenceTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import MinMaxScaler as mms
 from sklearn.cluster import KMeans, SpectralClustering
-from hdbscan import HDBSCAN
+# from hdbscan import HDBSCAN
 from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 
-from umap import UMAP
+# from umap import UMAP
+from cuml.cluster import HDBSCAN
+from cuml.manifold import UMAP
+
 import requests
 
 import seaborn as sns
@@ -188,13 +191,24 @@ class TopicModeling():
         umap_model = UMAP(**self.config['topic_umap_params'])
         u = umap_model.fit_transform(self.embeddings)
         hdbscan_model = HDBSCAN(**self.config['topic_hdbscan_params'])
+        # After reducing the embeddings (u) using UMAP
         clusters = np.array(hdbscan_model.fit_predict(u))
-        n_clusters = np.max(clusters) + 1
+
+        # Check if no clusters were detected (i.e. all labels are -1)
+        if np.max(clusters) < 0:
+            print("No clusters detected by HDBSCAN. Defaulting to 1 cluster.")
+            clusters = np.zeros_like(clusters)  # assign all documents to cluster 0
+            n_clusters = 1
+        else:
+            n_clusters = np.max(clusters) + 1
+
+        # Now compute centroids for each cluster
         centroids = np.empty((n_clusters, u.shape[1]))
         for cluster_i in range(n_clusters):
             inds_in_cluster_i = np.where(clusters == cluster_i)[0]
             points_in_cluster_i = u[inds_in_cluster_i]
             centroids[cluster_i, :] = np.mean(points_in_cluster_i, axis=0)
+
         kmeans_model = KMeans(n_clusters=n_clusters, random_state=42, init=centroids)
         representation_model = KeyBERTInspired()
         self.topic_model = BERTopic(vectorizer_model=vectorizer_model,
@@ -206,37 +220,100 @@ class TopicModeling():
         self.topics, _ = self.topic_model.fit_transform(self.texts, self.embeddings)
         if not os.path.exists(self.config['save_dir']):
             os.makedirs(self.config['save_dir'])
-        self.topic_model.save(f'{self.config["save_dir"]}/topic_model.pickle', save_ctfidf=True)
-        with open(f'{self.config["save_dir"]}/topics.pickle', 'wb') as fh:
-            import pickle
-            pickle.dump(self.topics, fh)
+        # self.topic_model.save(f'{self.config["save_dir"]}/topic_model.pickle', save_ctfidf=True)
+        # with open(f'{self.config["save_dir"]}/topics.pickle', 'wb') as fh:
+            # import pickle
+            # pickle.dump(self.topics, fh)
 
     def label_topics(self):
         self.topic_labeler = TopicLabeling(self.df, self.topics, self.embeddings, self.topic_model, self.config)
 
+
     def find_groups(self):
+        # Scale the c‑TF‑IDF matrix
         c_tf_idf_mms = mms().fit_transform(self.topic_model.c_tf_idf_.toarray())
-        self.c_tf_idf_vis = UMAP(n_neighbors=2, n_components=2, metric='hellinger', random_state=self.config['random_state']).fit_transform(c_tf_idf_mms)
-        self.c_tf_idf_embed = UMAP(**self.config['group_umap_params']).fit_transform(c_tf_idf_mms)
-        ideal_n_clusters = self.find_ideal_num_groups()
-        self.groups = SpectralClustering(n_clusters=ideal_n_clusters, random_state=self.config['random_state']).fit_predict(self.c_tf_idf_embed) + 1
+        n_samples = c_tf_idf_mms.shape[0]
+        print("n_samples:", n_samples)
+        
+        # For visualization (if needed)
+        if n_samples < 4:
+            print("Very small dataset detected. Skipping UMAP for visualization.")
+            self.c_tf_idf_vis = c_tf_idf_mms
+        else:
+            n_neighbors_vis = min(2, n_samples - 1) if n_samples > 1 else 1
+            self.c_tf_idf_vis = UMAP(
+                n_neighbors=n_neighbors_vis,
+                n_components=2,
+                metric='hellinger',
+                random_state=self.config['random_state']
+            ).fit_transform(c_tf_idf_mms)
+        
+        # For group embedding: if dataset is very small, skip UMAP and use scaled matrix directly.
+        if n_samples < 4:
+            print("Very small dataset detected. Skipping UMAP for group embedding.")
+            self.c_tf_idf_embed = c_tf_idf_mms
+        else:
+            # Dynamically update group UMAP configuration based on sample size.
+            new_n_components = max(1, min(self.config['group_umap_params']['n_components'], n_samples - 2))
+            self.config['group_umap_params']['n_components'] = new_n_components
+
+            new_n_neighbors = max(2, min(self.config['group_umap_params']['n_neighbors'], n_samples - 1))
+            self.config['group_umap_params']['n_neighbors'] = new_n_neighbors
+
+            self.c_tf_idf_embed = UMAP(**self.config['group_umap_params']).fit_transform(c_tf_idf_mms)
+        
+        # If there is only one sample, assign a default cluster without clustering.
+        if n_samples < 2:
+            print("Only one sample present. Assigning default cluster 1.")
+            self.groups = np.array([1])
+        else:
+            # Determine the ideal number of clusters.
+            ideal_n_clusters = self.find_ideal_num_groups()
+            print("Ideal number of clusters:", ideal_n_clusters)
+            if ideal_n_clusters == 0:
+                print("No clusters detected. Assigning all documents to a default topic.")
+                ideal_n_clusters = 1
+            self.groups = SpectralClustering(
+                n_clusters=ideal_n_clusters,
+                random_state=self.config['random_state']
+            ).fit_predict(self.c_tf_idf_embed) + 1
+
+
 
     def label_groups(self):
-        self.group_labeler = GroupLabeling(self.topics, self.topic_labeler.topic_labels, self.groups)
+        self.group_labeler = GroupLabeling(self.topics, self.topic_labeler.topic_labels, self.groups, self.topic_model)
 
-    def find_ideal_num_groups(self, llim=3, ulim=40):
+
+    def find_ideal_num_groups(self, llim=2, ulim=40):
         c_tf_idf_embed = self.c_tf_idf_embed
         n_samples = c_tf_idf_embed.shape[0]
-        upper_bound = min(ulim, n_samples + 1)
+        
+        # For very small datasets, the only valid number of clusters is 2.
+        if n_samples < 4:
+            print("Very small dataset detected: setting ideal number of clusters to 2.")
+            return 2
+        
+        # The maximum number of clusters is n_samples - 1 (since silhouette_score requires at least 2 clusters)
+        upper_bound = min(ulim, n_samples - 1)
+        
         ss = []
-        cluster_arr = np.arange(llim, upper_bound, 2)
+        # Generate candidate cluster counts in the valid range
+        cluster_arr = np.arange(llim, upper_bound + 1, 2)
         for n_clusters in cluster_arr:
-            clusters = SpectralClustering(n_clusters=n_clusters, random_state=42, n_components=2).fit_predict(c_tf_idf_embed)
+            clusters = SpectralClustering(
+                n_clusters=n_clusters,
+                random_state=42,
+                n_components=2
+            ).fit_predict(c_tf_idf_embed)
             ss.append(silhouette_score(c_tf_idf_embed, clusters))
+        
         ideal_n_clusters = cluster_arr[np.argmax(ss)]
-        ideal_n_clusters = min(ideal_n_clusters, n_samples)
+        # Just in case, ensure the ideal number is within the valid range.
+        ideal_n_clusters = min(ideal_n_clusters, n_samples - 1)
         print("top silhouette score: {0:0.3f} for at n_clusters {1}".format(np.max(ss), ideal_n_clusters))
         return ideal_n_clusters
+
+
 
 
     @staticmethod
@@ -530,14 +607,15 @@ class TopicLabeling():
         self.prompts = prompts
 
 class GroupLabeling():
-
-    def __init__(self, topics, topic_labels, groups):
+    def __init__(self, topics, topic_labels, groups, topic_model):
         self.topics = topics
-        self.groups = groups              # <-- Store groups
-        self.topic_labels = topic_labels  # <-- Store topic labels
+        self.groups = groups              # Store groups
+        self.topic_labels = topic_labels  # Store topic labels
+        self.topic_model = topic_model    # Store the topic model
         self.create_group_labels(groups, topic_labels)
         self.prepare_prompts_for_group_labeling()
         self.finalize_group_labels_with_llm()
+
 
     def create_group_labels(self, groups, topic_labels):
         group_labels_combined = {}
@@ -581,11 +659,10 @@ class GroupLabeling():
             labels[group] = re.findall(pattern, response)[0]
             
         self.group_labels = labels
-    
+
     def create_topic_group_listing(self):
 
         groups, topic_labels = self.groups, self.topic_labels
-
         text = ''
 
         for group in range(1, groups.max() + 1):
@@ -595,7 +672,13 @@ class GroupLabeling():
             topics_group_i = np.where(groups == group)[0]
 
             for tl_i in topics_group_i:
+                # Retrieve the top 5 c-TF-IDF keywords for this topic
+                top_n = 5
+                ctfidf_keywords = self.topic_model.get_topic(tl_i)[:top_n]
+                keywords_str = ", ".join([word for word, weight in ctfidf_keywords])
+                
                 text += f'TOPIC {tl_i} :: {topic_labels[tl_i]}\n'
+                text += f'c-TF-IDF Keywords: {keywords_str}\n'
 
             text += f'===============================================================\n'
 
