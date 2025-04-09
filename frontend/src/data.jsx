@@ -170,6 +170,7 @@ function Data() {
               }
             }
           ],
+          order: [[4, 'desc']],
           paging: false,
           searching: false,
           ordering: false,
@@ -220,6 +221,7 @@ function Data() {
           }
         }
       ],
+      order: [[4, 'desc']],
       paging: true,
       searching: false,
       ordering: true,
@@ -253,13 +255,17 @@ function Data() {
       setSentimentKeywords(sentiment);
       setStartDate(startDate);
       setEndDate(endDate);
-      fetchData(0, 10, 1, searchValue);
-      tableInitializedRef.current = true;
-      if ($.fn.DataTable.isDataTable("#click-table")) {
-        $("#click-table").DataTable().ajax.reload();
-      }
 
-      //Do we want sentiment analysis run at the same time or allow the user to select it instead.
+      //issue where go to needs to be clicked twice
+      setTimeout(() => {
+        fetchData(0, 10, 1, searchValue).then(() => {
+          tableInitializedRef.current = true;
+          if ($.fn.DataTable.isDataTable("#click-table")) {
+            $("#click-table").DataTable().ajax.reload();
+          }
+        });
+      }, 50);
+
     });
 
     $("#clear-all-btn").on("click", ClearAllSearch);
@@ -338,6 +344,10 @@ function Data() {
                   id: row[4],
                 }))
               });
+              //3000 Alert
+              if (apiData.recordsFiltered <= 3000) {
+                //alert("Data contains 3000 rows or less.");
+              }
             } else {
               console.error("API data is not in expected format:", apiData);
               callback({
@@ -361,9 +371,13 @@ function Data() {
             data: "id",
             title: "Post Link",
             width: '150px',
-            render: function (data, type, row) {
-              const postLink = `https://reddit.com/r/${row.subreddit}/comments/${data}`;
-              return `<a href="${postLink}" target="_blank">View Post</a>`;
+            render: {
+              display: function (data, type, row) {
+                return `<a href="https://reddit.com/r/${row.subreddit}/comments/${data}" target="_blank">View Post</a>`;
+              },
+              export: function (data, type, row) {
+                return `https://reddit.com/r/${row.subreddit}/comments/${data}`;
+              }
             }
           }
         ],
@@ -373,9 +387,9 @@ function Data() {
         responsive: true,
         autoWidth: false,
         //adds extra row of column headers, cant remove currently
-        //scrollY: '600px',
-        //scrollCollapse: true,
-        //scroller: true,
+        scrollY: '600px',
+        scrollCollapse: true,
+        scroller: true,
         columnDefs: [
           {
             targets: '_all',
