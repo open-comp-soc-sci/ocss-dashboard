@@ -10,8 +10,8 @@ from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
 
 load_dotenv()
 
-#Currently set to 5, increase later.
-POOL_SIZE = 5 
+#Currently set to 25, increase later if needed.
+POOL_SIZE = 25 
 connection_pool = Queue(maxsize=POOL_SIZE)
 
 def get_new_client():
