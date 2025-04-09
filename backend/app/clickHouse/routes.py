@@ -8,10 +8,17 @@ import pika
 from . import clickHouse_BP
 from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
 
+import csv
+import io
+import pandas as pd
+from flask import Response
+from openpyxl import Workbook
+from io import BytesIO
+
 load_dotenv()
 
-#Currently set to 5, increase later.
-POOL_SIZE = 5 
+#Currently set to 25, increase later if needed.
+POOL_SIZE = 25
 connection_pool = Queue(maxsize=POOL_SIZE)
 
 def get_new_client():
@@ -23,8 +30,10 @@ def get_new_client():
         password=os.getenv('CH_PASSWORD')
     )
 
+
 for _ in range(POOL_SIZE):
     connection_pool.put(get_new_client())
+
 
 def get_pooled_client():
     try:
@@ -32,8 +41,10 @@ def get_pooled_client():
     except:
         raise Exception("No ClickHouse connections are available.")
 
+
 def release_client(client):
     connection_pool.put(client)
+
 
 @clickHouse_BP.route("/api/get_all_click", methods=["GET"])
 def get_all_click():
@@ -50,6 +61,7 @@ def get_all_click():
         start_date = request.args.get('startDate', None, type=str)
         end_date = request.args.get('endDate', None, type=str)
 
+
         # Build the base query based on the option.
         if option == "reddit_submissions":
             base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
@@ -57,6 +69,7 @@ def get_all_click():
             base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
         else:
             return jsonify({"error": "Invalid option provided."}), 400
+
 
         # Build the conditions.
         conditions = []
@@ -80,16 +93,20 @@ def get_all_click():
             end_date_formatted = end_date.replace("T", " ").split(".")[0]
             conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
 
+
         query = base_query
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY created_utc DESC"
         query += f" LIMIT {length} OFFSET {start}"
 
+
         print("Executing query:", query, flush=True)
+
 
         result = client.query(query)
         data = result.result_rows
+
 
         # Build the count query.
         if option == "reddit_submissions":
@@ -101,6 +118,7 @@ def get_all_click():
         total_result = client.query(count_query)
         total_records = total_result.result_rows[0][0]
 
+
         return jsonify({
             "draw": draw,
             "recordsTotal": total_records,
@@ -108,11 +126,13 @@ def get_all_click():
             "data": data
         })
 
+
     except Exception as e:
         print(e, flush=True)
         return jsonify({"error": str(e)}), 500
     finally:
         release_client(client)
+
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
@@ -132,5 +152,92 @@ def run_sentiment():
         result = rpc_client.call(message)
         return jsonify({"result": json.loads(result)}), 200
 
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+   
+@clickHouse_BP.route("/api/export_data", methods=["GET"])
+def export_data():
+    try:
+        option = request.args.get('option', default='reddit_submissions')
+        subreddit = request.args.get('subreddit', '', type=str)
+        client = get_pooled_client()
+        search_value = request.args.get('search[value]', '', type=str)
+        sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
+        start_date = request.args.get('startDate', None, type=str)
+        end_date = request.args.get('endDate', None, type=str)
+        export_format = request.args.get('format', default='csv')
+
+        if option == "reddit_submissions":
+            base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
+        elif option == "reddit_comments":
+            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
+        else:
+            return jsonify({"error": "Invalid option provided."}), 400
+
+        conditions = []
+        if subreddit:
+            conditions.append(f"subreddit = '{subreddit}'")
+        if search_value:
+            if option == "reddit_submissions":
+                conditions.append(f"(subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%')")
+            else:
+                conditions.append(f"(subreddit LIKE '%{search_value}%' OR body LIKE '%{search_value}%')")
+        if sentiment_keywords:
+            if option == "reddit_submissions":
+                conditions.append(f"(title LIKE '%{sentiment_keywords}%' OR selftext LIKE '%{sentiment_keywords}%')")
+            else:
+                conditions.append(f"(body LIKE '%{sentiment_keywords}%')")
+        if start_date:
+            start_date_formatted = start_date.replace("T", " ").split(".")[0]
+            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
+        if end_date:
+            end_date_formatted = end_date.replace("T", " ").split(".")[0]
+            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
+
+        query = base_query
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_utc DESC"
+
+        result = client.query(query)
+        rows = result.result_rows
+        columns = ['Subreddit', 'Title', 'Text', 'Created UTC', 'Post Link']
+        formatted_rows = [
+            [row[0], row[1], row[2], row[3], f"https://reddit.com/r/{row[0]}/comments/{row[4]}"]
+            for row in rows
+        ]
+
+        if export_format == 'csv':
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(columns)
+            writer.writerows(formatted_rows)
+            output.seek(0)
+            return Response(output, mimetype='text/csv', headers={
+                "Content-Disposition": "attachment; filename=reddit_export.csv"
+            })
+        elif export_format == 'excel':
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Reddit Export"
+            ws.append(columns)
+
+            for row in formatted_rows:
+                ws.append(row)
+
+            output = BytesIO()
+            wb.save(output)
+            output.seek(0)
+            return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        headers={"Content-Disposition": "attachment; filename=reddit_export.xlsx"})
+
+        #PDF Issue with default latin-1 encoding, maybe swap from FPDF
+        #Maybe try with reportlab and canvas
+        #Keep copy as normal
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        release_client(client)
+
