@@ -346,7 +346,7 @@ function Data() {
               });
               //3000 Alert
               if (apiData.recordsFiltered <= 3000) {
-                //alert("Data contains 3000 rows or less.");
+                alert("Data contains 3000 rows or less.");
               }
             } else {
               console.error("API data is not in expected format:", apiData);
@@ -400,30 +400,38 @@ function Data() {
         ],
         buttons: [
           {
-            extend: 'excelHtml5',
-            title: 'Table Export',
-            exportOptions: {
-              columns: ':visible'
-            },
+            text: 'Excel',
+            action: function () {
+              window.open(`/api/export_data?format=excel&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
+            }
           },
+          //Fix PDF, IN PROGRESS
           {
             extend: 'pdfHtml5',
             title: 'Table Export',
             orientation: 'landscape',
             pageSize: 'LEGAL',
             exportOptions: {
-              columns: ':visible'
+              modifier: {
+                selected: null
+              },
+              columns: ':visible',
+              orthogonal: 'export'
             },
           },
           {
+            text: 'CSV',
+            action: function () {
+              window.open(`/api/export_data?format=csv&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
+            }
+          },
+          {
             extend: 'copy',
+            exportOptions: {
+              columns: ':visible',
+              orthogonal: 'export'
+            }
           },
-          {
-            extend: 'csv',
-          },
-          {
-            extend: 'print',
-          }
         ],
         drawCallback: function () {
           var api = this.api();
