@@ -1,3 +1,6 @@
+# this program is adapted from
+# https://github.com/sssomani/glp1_reddit/blob/main/topic_modeling/topic_model.py
+
 import pandas as pd
 import numpy as np
 import pika
@@ -57,14 +60,15 @@ config = {
     'save_dir': "saved",
     'random_state': 42,
     'topic_hdbscan_params': {
-        'min_cluster_size': 100,
+        'min_cluster_size': 50,
+        'min_samples': 5,
         'metric': 'euclidean',
-        'cluster_selection_method': 'eom',
+        'cluster_selection_method': 'leaf',
         'prediction_data': True
     },
     'topic_umap_params': {
         'n_neighbors': 15,
-        'n_components': 7,
+        'n_components': 10,
         'min_dist': 0.0,
         'metric': 'cosine',
         'random_state': 42
@@ -139,14 +143,21 @@ class TopicModeling():
             # Convert the JSON data into a DataFrame based on the option.
             # For submissions:
             if option == "reddit_submissions":
-                df = pd.DataFrame(data["data"], columns=["id", "subreddit", "title", "selftext", "created_utc"])
+                # print('whats this')
+                # print(data["data"][0:400])
+                df = pd.DataFrame(data["data"], columns=["subreddit", "title", "selftext", "created_utc", "id"])
                 df = df.rename(columns={"selftext": "body"})
             elif option == "reddit_comments":
+                # print('whats this')
+                # print(data["data"][0:400])
                 df = pd.DataFrame(data["data"], columns=["subreddit", "title", "body", "created_utc", "id"])
                 # df = pd.DataFrame(data["data"], columns=["id", "parent_id", "subreddit", "body", "created_utc"])
 
             else:
                 raise ValueError(f"Invalid option provided: {option}")
+
+            print('this many rows:')
+            print(len(df))
 
 
             # print('!')
@@ -398,28 +409,54 @@ class TopicModeling():
                 topic_table.loc[tl_i + 1, 'c-TF-IDF Keywords'] = top_words_str
         topic_table.to_excel(f'{self.config["save_dir"]}/topic_table.xlsx')
 
+
     def send_groups(self):
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="sunshine.cise.ufl.edu", port=5672,
-            credentials=pika.PlainCredentials("user", "password")))
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(
+                host="sunshine.cise.ufl.edu",
+                port=5672,
+                credentials=pika.PlainCredentials("user", "password")
+            )
+        )
         channel = connection.channel()
         channel.queue_declare(queue="grouping_results", durable=True)
         
-        # Build a dictionary that includes group details.
+        # Create a meta-data dictionary with additional details.
+        meta_data = {
+            "subreddit": self.config.get("subreddit"),
+            "option": self.config.get("option"),  # Indicates posts or comments.
+            "startDate": self.config.get("startDate", ""),
+            "endDate": self.config.get("endDate", "")
+        }
+        
+        # Build the grouping results in a dictionary.
         group_data = {}
+        top_n = 5  # Number of c-TF-IDF keywords to include.
         for idx, group in enumerate(self.groups):
-            # Convert the group key to a native int
+            # Convert the group key to a native int.
             group_key = int(group)
             topic_label = self.topic_labeler.topic_labels.get(idx, "No label")
+            # Retrieve the c-TF-IDF keywords (tuple of word and weight) and join the top N words.
+            topic_keywords_tuples = self.topic_model.get_topic(idx)
+            keywords_str = ", ".join(word for word, weight in topic_keywords_tuples[:top_n])
+            
             if group_key not in group_data:
                 group_data[group_key] = []
             group_data[group_key].append({
-                "topic_index": int(idx),  # Also convert idx if necessary
+                "topic_index": int(idx),
                 "topic_label": topic_label,
-                # You could add more details here, such as representative docs or counts.
+                "ctfidf_keywords": keywords_str
+                # You can add more details here if necessary.
             })
-
-        message = json.dumps(group_data)
-
+        
+        # Combine meta-data and grouping results into a single dictionary.
+        message_data = {
+            "meta": meta_data,
+            "groups": group_data
+        }
+        
+        message = json.dumps(message_data)
+        
         channel.basic_publish(
             exchange="",
             routing_key="grouping_results",
@@ -524,15 +561,15 @@ class TopicLabeling():
     @staticmethod
     def prepare_prompt(topic_model, rep_docs, topic_of_interest):
         """
-        Returns a prompt that explicitly instructs the LLM to output three short labels 
+        Returns a prompt that explicitly instructs the LLM to output three labels 
         in strict JSON format: ["Label 1","Label 2","Label 3"].
         """
         prompt = """
-    You are an AI assistant that returns exactly three short labels in JSON array format, with no additional text or commentary.
+    You are an AI assistant helping social scientists that returns exactly three labels in JSON array format, with no additional text or commentary.
     For example: ["Label A","Label B","Label C"].
 
     Below are topic keywords and a handful of representative documents. 
-    Please respond with ONLY a single JSON array of exactly three short labels, 
+    Please respond with ONLY a single JSON array of exactly three labels, 
     and nothing else (no extra text, no quotes around the JSON).
 
     Topic keywords:
@@ -541,7 +578,10 @@ class TopicLabeling():
     Representative documents:
     {docs}
 
-    Now produce one JSON array of three short labels, e.g.: ["Label 1","Label 2","Label 3"].
+    In your label writing, consider defining acronyms that may be used, if they are used in the documents. 
+    For instance, if a keyword is "AI", consider making a label Artificial Intelligence. This helps sociologists
+    understand the topic better.
+    Now produce one JSON array of three labels, e.g.: ["Label 1","Label 2","Label 3"].
     """.format(
             keywords=", ".join(topic_model.get_topic_info(topic_of_interest)['Representation'][0]),
             docs="\n".join(rep_docs[topic_of_interest])
@@ -638,7 +678,7 @@ class GroupLabeling():
         group_prompts = {}
         for group, group_label in self.group_labels_combined.items():
             # Create prompt for LLaMa2
-            prompt = 'You are a honest, scientific chatbot that helps me, a sociologist, create a single representative label for a group that represents a series of topics based on topic labels. Each topic label is separated by a new line character. Do not be creative or loquacious. Please present the group label in a short and direct manner.\n\n'
+            prompt = 'You are a honest, scientific chatbot that helps me, a sociologist, create a single representative label for a group that represents a series of topics based on topic labels. Each topic label is separated by a new line character. Do not be creative or loquacious. Please present the group label in a direct manner.\n\n'
             prompt += 'I have a group that is described by the following topic labels:\n\''
             prompt += group_label
             prompt += '\n\nBased on the information above, can you create the one, best, direct label for this topic in the following format?\n'
@@ -661,7 +701,6 @@ class GroupLabeling():
         self.group_labels = labels
 
     def create_topic_group_listing(self):
-
         groups, topic_labels = self.groups, self.topic_labels
         text = ''
 
@@ -672,9 +711,8 @@ class GroupLabeling():
             topics_group_i = np.where(groups == group)[0]
 
             for tl_i in topics_group_i:
-                # Retrieve the top 5 c-TF-IDF keywords for this topic
-                top_n = 5
-                ctfidf_keywords = self.topic_model.get_topic(tl_i)[:top_n]
+                # Retrieve all c-TF-IDF keywords for this topic without slicing.
+                ctfidf_keywords = self.topic_model.get_topic(tl_i)
                 keywords_str = ", ".join([word for word, weight in ctfidf_keywords])
                 
                 text += f'TOPIC {tl_i} :: {topic_labels[tl_i]}\n'
