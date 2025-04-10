@@ -7,3 +7,5 @@ Flask-CORS
 clickhouse-connect
 pika
 rabbitmq
+pandas
+openpyxl
