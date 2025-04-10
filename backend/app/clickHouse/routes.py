@@ -1,4 +1,4 @@
-from flask import jsonify, request
+from flask import jsonify, request, Response
 from clickhouse_connect import get_client
 from dotenv import load_dotenv
 from queue import Queue
@@ -11,9 +11,11 @@ from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
 import csv
 import io
 import pandas as pd
-from flask import Response
 from openpyxl import Workbook
 from io import BytesIO
+from reportlab.lib.pagesizes import letter, legal
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
 
 load_dotenv()
 
@@ -234,7 +236,8 @@ def export_data():
 
         #PDF Issue with default latin-1 encoding, maybe swap from FPDF
         #Maybe try with reportlab and canvas
-        #Keep copy as normal
+        elif export_format == 'json':
+            return formatted_rows
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
