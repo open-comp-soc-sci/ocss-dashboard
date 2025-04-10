@@ -26,6 +26,7 @@ function Data() {
   const [sentimentResults, setSentimentResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
+  const [dataMessage, setDataMessage] = useState(false);
 
   // This ref controls whether the main results DataTable should fetch data
   const tableInitializedRef = useRef(false);
@@ -346,7 +347,11 @@ function Data() {
               });
               //3000 Alert
               if (apiData.recordsFiltered <= 3000) {
-                alert("Data contains 3000 rows or less.");
+                //alert("Data contains 3000 rows or less.");
+                setDataMessage(true);
+              }
+              else {
+                setDataMessage(false);
               }
             } else {
               console.error("API data is not in expected format:", apiData);
@@ -405,7 +410,20 @@ function Data() {
               window.open(`/api/export_data?format=excel&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
             }
           },
-          //Fix PDF, IN PROGRESS
+          {
+            text: 'CSV',
+            action: function () {
+              window.open(`/api/export_data?format=csv&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
+            }
+          },
+          //Replaced PDF with JSON
+          {
+            text: 'JSON',
+            action: function () {
+              window.open(`/api/export_data?format=json&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
+            }
+          },
+          //PDF AND COPY ONLY DO VISIBLE ROWS
           {
             extend: 'pdfHtml5',
             title: 'Table Export',
@@ -418,12 +436,6 @@ function Data() {
               columns: ':visible',
               orthogonal: 'export'
             },
-          },
-          {
-            text: 'CSV',
-            action: function () {
-              window.open(`/api/export_data?format=csv&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
-            }
           },
           {
             extend: 'copy',
@@ -671,6 +683,7 @@ function Data() {
       {/* Main Results DataTable */}
       <div className="mt-5">
         <h2>Results</h2>
+        <h5>{dataMessage && <div style={{ color: 'red' }}>Data contains 3000 rows or less and may be insufficient.</div>}</h5>
         <div>
           <table id="click-table" className="display">
             <thead>
