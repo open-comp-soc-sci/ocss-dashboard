@@ -11,6 +11,8 @@ import pdfMake from 'pdfmake';
 import 'pdfmake/build/vfs_fonts.js';
 import 'datatables.net-buttons/js/buttons.html5.min';
 import 'datatables.net-buttons/js/buttons.print.min';
+import handleNotify from './toast';
+import { ToastContainer } from 'react-toastify';
 
 
 function Data() {
@@ -527,6 +529,11 @@ function Data() {
     }
   };
 
+  useEffect(() => {
+    if (sentimentResults) {
+      handleNotify();
+    }
+  }, [sentimentResults]);
 
   return (
     <div className="container mt-5">
@@ -666,12 +673,13 @@ function Data() {
             {/* PUT CHART HERE */}
           </div>
           <button className="btn btn-secondary">Save as PNG</button>
-          
+
           <div className="mt-4">
             <button className="btn btn-success" onClick={runSentimentAnalysis}>
               {loadingSentiment ? 'Analyzing...' : 'Run Sentiment Analysis'}
             </button>
           </div>
+          <ToastContainer />
           {sentimentResults && (
             <div className="mt-3">
               <h4>Sentiment Analysis Results:</h4>
