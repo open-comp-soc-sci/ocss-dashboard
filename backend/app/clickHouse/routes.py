@@ -13,9 +13,6 @@ import io
 import pandas as pd
 from openpyxl import Workbook
 from io import BytesIO
-from reportlab.lib.pagesizes import letter, legal
-from reportlab.lib import colors
-from reportlab.pdfgen import canvas
 
 load_dotenv()
 
