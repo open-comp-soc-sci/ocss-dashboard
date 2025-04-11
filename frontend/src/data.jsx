@@ -29,6 +29,7 @@ function Data() {
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
   const [dataMessage, setDataMessage] = useState(false);
+  const [subredditIcon, setSubredditIcon] = useState(null);
 
   // This ref controls whether the main results DataTable should fetch data
   const tableInitializedRef = useRef(false);
@@ -266,6 +267,9 @@ function Data() {
           if ($.fn.DataTable.isDataTable("#click-table")) {
             $("#click-table").DataTable().ajax.reload();
           }
+          if (subreddit) {
+            getSubredditIcon(subreddit);
+          }
         });
       }, 50);
 
@@ -500,6 +504,9 @@ function Data() {
     if ($.fn.DataTable.isDataTable("#click-table")) {
       $("#click-table").DataTable().ajax.reload();
     }
+    if (subreddit) {
+      getSubredditIcon(subreddit);
+    }
   };
 
   const runSentimentAnalysis = async () => {
@@ -534,6 +541,22 @@ function Data() {
       handleNotify();
     }
   }, [sentimentResults]);
+
+  const getSubredditIcon = async (subReddit) => {
+    try {
+      const response = await fetch(`https://www.reddit.com/r/${subReddit}/about.json`);
+      const data = await response.json();
+      const subredditIcon = data.data.icon_img;
+
+      if (!subredditIcon) {
+        setSubredditIcon('../public/reddit-1.svg');
+      } else {
+        setSubredditIcon(subredditIcon);
+      }
+    } catch (error) {
+      setSubredditIcon('../public/reddit-1.svg');
+    }
+  };
 
   return (
     <div className="container mt-5">
@@ -691,7 +714,23 @@ function Data() {
 
       {/* Main Results DataTable */}
       <div className="mt-5">
-        <h2>Results</h2>
+        <div className="mt-4 text-left d-flex">
+          <h2>Results for r/{subreddit}</h2>
+          {subredditIcon && (
+            <img
+              src={subredditIcon}
+              alt="Subreddit Icon"
+              style={{
+                maxWidth: '100px',
+                maxHeight: '100px',
+                border: '5px solid white',
+                borderRadius: '50%',
+                transform: 'translateY(-30px)',
+                marginLeft: '10px'
+              }}
+            />
+          )}
+        </div>
         <h5>{dataMessage && <div style={{ color: 'red' }}>Data contains 3000 rows or less and may be insufficient.</div>}</h5>
         <div>
           <table id="click-table" className="display">
