@@ -8,10 +8,11 @@ import 'datatables.net';
 import 'datatables.net-buttons';
 import JSZip from 'jszip';
 import pdfMake from 'pdfmake';
+import * as Arrow from 'apache-arrow';
 import 'pdfmake/build/vfs_fonts.js';
 import 'datatables.net-buttons/js/buttons.html5.min';
 import 'datatables.net-buttons/js/buttons.print.min';
-import SentimentTable from './SentimentTable';
+import TopicTablesContainer from './TopicTablesContainer';
 import handleNotify from './toast';
 import { ToastContainer } from 'react-toastify';
 
@@ -26,7 +27,7 @@ function Data() {
   const [error, setError] = useState(null);
   const [option, setOption] = useState("reddit_submissions");
   const [selectedOption, setSelectedOption] = useState("reddit_submissions");
-  const [sentimentResults, setSentimentResults] = useState(null);
+  const [clusteringResults, setClusteringResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
   const [dataMessage, setDataMessage] = useState(false);
@@ -132,6 +133,57 @@ function Data() {
       button.disabled = false;
     }
   };
+
+  const fetchArrowData = async (start, length, draw, searchValue) => {
+    try {
+      // Build the URL for the Arrow endpoint.
+      const url = `/api/get_arrow?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(endDate.toISOString())}`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Arrow data: ${response.statusText}`);
+      }
+      
+      // Get the binary data
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Use Arrow.tableFromIPC (or your preferred method) to parse the data.
+      const table = await Arrow.tableFromIPC(new Uint8Array(arrayBuffer));
+      
+      // Debug the schema to verify column names.
+      console.log("Arrow table schema:", table.schema.fields.map(f => f.name));
+      
+      // Instead of converting all rows, only convert the ones for the requested page.
+      const paginatedData = [];
+      const totalRows = table.numRows;
+      const endIndex = Math.min(totalRows, start + length);
+      for (let i = start; i < endIndex; i++) {
+        const row = {};
+        for (let j = 0; j < table.schema.fields.length; j++) {
+          const columnName = table.schema.fields[j].name;
+          const value = table.getChildAt(j).get(i);
+          // If this is the created_utc column, convert from Unix ms to a string.
+          if (columnName === 'created_utc' && typeof value === 'number') {
+            row[columnName] = new Date(value).toLocaleString();
+          } else {
+            row[columnName] = value;
+          }
+        }
+        paginatedData.push(row);
+      }
+      
+      return {
+        draw: draw,
+        recordsTotal: totalRows,
+        recordsFiltered: totalRows,
+        data: paginatedData
+      };
+    } catch (error) {
+      console.error("Error processing Arrow data:", error);
+      throw error;
+    }
+  };  
+  
 
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
@@ -336,43 +388,25 @@ function Data() {
             return;
           }
           const { start, length, draw, search } = data;
-          // Use current state values when fetching data.
-          fetchData(start, length, draw, search.value).then(apiData => {
-            if (apiData && Array.isArray(apiData.data)) {
-              callback({
-                draw: apiData.draw,
-                recordsTotal: apiData.recordsTotal,
-                recordsFiltered: apiData.recordsFiltered,
-                data: apiData.data.map(row => ({
-                  subreddit: row[0],
-                  //See if we can grab the post title from the post link potentially, if it doesnt slow down performance
-                  title: selectedOption === "reddit_comments" ? "(Comment)" : row[1],
-                  selftext: row[2],
-                  created_utc: row[3],
-                  id: row[4],
-                }))
-              });
-              //3000 Alert
+          // Use the Arrow endpoint instead of the old JSON endpoint.
+            fetchArrowData(start, length, draw, search.value)
+            .then(apiData => {
+              callback(apiData);
               if (apiData.recordsFiltered <= 3000) {
-                //alert("Data contains 3000 rows or less.");
                 setDataMessage(true);
-              }
-              else {
+              } else {
                 setDataMessage(false);
               }
-            } else {
-              console.error("API data is not in expected format:", apiData);
+            })
+            .catch(error => {
+              console.error("Error fetching Arrow data:", error);
               callback({
                 draw: data.draw,
                 recordsTotal: 0,
                 recordsFiltered: 0,
                 data: []
               });
-            }
-          }).catch(error => {
-            console.error("Error fetching data:", error);
-            callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
-          });
+            });
         },
         columns: [
           { data: "subreddit", title: "Subreddit", width: '10%' },
@@ -398,7 +432,6 @@ function Data() {
         deferRender: true,
         responsive: true,
         autoWidth: false,
-        //adds extra row of column headers, cant remove currently
         scrollY: '600px',
         scrollCollapse: true,
         scroller: true,
@@ -423,14 +456,12 @@ function Data() {
               window.open(`/api/export_data?format=csv&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
             }
           },
-          //Replaced PDF with JSON
           {
             text: 'JSON',
             action: function () {
               window.open(`/api/export_data?format=json&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
             }
           },
-          //PDF AND COPY ONLY DO VISIBLE ROWS
           {
             extend: 'pdfHtml5',
             title: 'Table Export',
@@ -452,19 +483,6 @@ function Data() {
             }
           },
         ],
-        drawCallback: function () {
-          var api = this.api();
-          if (api.rows({ filter: 'applied' }).count() === 0) {
-            api.buttons().container().hide();
-          } else {
-            api.buttons().container().show();
-          }
-
-          //fix styling of buttons, match other buttons, align right of data table
-          api.buttons().container().find('button').each(function () {
-            $(this).addClass('btn btn-danger');
-          });
-        },
         language: {
           paginate: {
             first: "<<",
@@ -473,7 +491,7 @@ function Data() {
             last: ">>"
           }
         }
-      });
+        });
 
       $("#goToPageButton").on("click", function () {
         const page = parseInt($("#pageInput").val(), 10) - 1;
@@ -496,8 +514,8 @@ function Data() {
   }, [subreddit, selectedOption, sentimentKeywords, startDate, endDate]);
 
   useEffect(() => {
-    if (sentimentResults && sentimentResults.groups) {
-      sentimentResults.groups.forEach((group, index) => {
+    if (clusteringResults && clusteringResults.groups) {
+      clusteringResults.groups.forEach((group, index) => {
         const tableSelector = `#sentiment-table-${index}`;
         setTimeout(() => {
           if ($(tableSelector).length) {
@@ -517,7 +535,7 @@ function Data() {
         }, 500); // Delay to allow DOM updates
       });
     }
-  }, [sentimentResults]);
+  }, [clusteringResults]);
   
   
   
@@ -539,7 +557,7 @@ function Data() {
 
   const runSentimentAnalysis = async () => {
     // Clear previous results
-    setSentimentResults(null);
+    setClusteringResults(null);
     
     setLoadingSentiment(true);
     setError(null);
@@ -558,7 +576,7 @@ function Data() {
       const resultData = await response.json();
       console.log("Result Data:", resultData.result);
       // Set the state to the inner result object.
-      setSentimentResults(resultData.result);
+      setClusteringResults(resultData.result);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -567,10 +585,10 @@ function Data() {
   };  
 
   useEffect(() => {
-    if (sentimentResults) {
+    if (clusteringResults) {
       handleNotify();
     }
-  }, [sentimentResults]);
+  }, [clusteringResults]);
 
   const getSubredditIcon = async (subReddit) => {
     try {
@@ -721,7 +739,7 @@ function Data() {
         {/* Sentiment Analysis Section */}
         
         <div className="col-md-8">
-          <h2>Sentiment Analysis</h2>
+        <h2>Sentiment Analysis</h2>
           <p>Posts within the selected date range.</p>
           <div
             style={{
@@ -737,24 +755,26 @@ function Data() {
 
           <div className="mt-4">
             <button className="btn btn-success" onClick={runSentimentAnalysis}>
-              {loadingSentiment ? 'Analyzing...' : 'Run Sentiment Analysis'}
+              {loadingSentiment ? 'Analyzing...' : 'Run Topic Clustering'}
             </button>
           </div>
           <ToastContainer />
-                      <h2>Sentiment Analysis</h2> 
-        {sentimentResults &&
-  sentimentResults.result &&
-  sentimentResults.result.groups &&
-  sentimentResults.result.groups.map((group, groupIndex) => (
-    <div key={groupIndex} className="group-section mt-3">
-      <h4>Group {group.group}: {group.llmLabel}</h4>
-      <SentimentTable group={group} />
-    </div>
-))}
-
-      
+    
         </div>
       </div>
+
+      {clusteringResults &&
+        clusteringResults.result &&
+        clusteringResults.result.groups && (
+          <div className="row mt-4">
+            <div className="col-md-12">
+              <h2>Topic Clustering Results</h2>
+              <TopicTablesContainer groups={clusteringResults.result.groups} />
+            </div>
+          </div>
+        )
+      }
+
 
       {/* Main Results DataTable */}
       <div className="mt-5">

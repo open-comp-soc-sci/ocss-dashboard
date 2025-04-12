@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
+    "apache-arrow": "^19.0.1",
     "datatables.net": "^2.2.2",
     "datatables.net-bs5": "^2.2.2",
     "datatables.net-buttons": "^3.2.2",
