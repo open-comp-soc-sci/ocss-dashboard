@@ -11,6 +11,7 @@ import pdfMake from 'pdfmake';
 import 'pdfmake/build/vfs_fonts.js';
 import 'datatables.net-buttons/js/buttons.html5.min';
 import 'datatables.net-buttons/js/buttons.print.min';
+import SentimentTable from './SentimentTable';
 
 
 function Data() {
@@ -488,6 +489,33 @@ function Data() {
     };
   }, [subreddit, selectedOption, sentimentKeywords, startDate, endDate]);
 
+  useEffect(() => {
+    if (sentimentResults && sentimentResults.groups) {
+      sentimentResults.groups.forEach((group, index) => {
+        const tableSelector = `#sentiment-table-${index}`;
+        setTimeout(() => {
+          if ($(tableSelector).length) {
+            // Destroy any previous instance (if re-initializing)
+            if ($.fn.DataTable.isDataTable(tableSelector)) {
+              $(tableSelector).DataTable().destroy();
+            }
+            // Initialize DataTable on this table
+            $(tableSelector).DataTable({
+              paging: true,
+              searching: true,
+              responsive: true,
+              autoWidth: false,
+              // Add any additional DataTable options as needed.
+            });
+          }
+        }, 500); // Delay to allow DOM updates
+      });
+    }
+  }, [sentimentResults]);
+  
+  
+  
+
   // When Submit is clicked, mark table as initialized and reload the DataTable.
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -501,6 +529,9 @@ function Data() {
   };
 
   const runSentimentAnalysis = async () => {
+    // Clear previous results
+    setSentimentResults(null);
+    
     setLoadingSentiment(true);
     setError(null);
     try {
@@ -508,7 +539,7 @@ function Data() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subreddit: subreddit,
+          subreddit,
           option: selectedOption,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
@@ -516,16 +547,15 @@ function Data() {
       });
       if (!response.ok) throw new Error("Sentiment analysis failed.");
       const resultData = await response.json();
-      // Display detailed grouping results in a pop-up.
-      window.alert("Topic Modeling Results:\n" + JSON.stringify(resultData.result, null, 2));
-      // Optionally update state to render results in the UI.
+      console.log("Result Data:", resultData.result);
+      // Set the state to the inner result object.
       setSentimentResults(resultData.result);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoadingSentiment(false);
     }
-  };
+  };  
 
 
   return (
@@ -652,33 +682,29 @@ function Data() {
         </div>
 
         {/* Sentiment Analysis Section */}
+        
         <div className="col-md-8">
-          <h2>Sentiment Analysis</h2>
-          <p>Posts within the selected date range.</p>
-          <div
-            style={{
-              backgroundColor: '#333',
-              height: '350px',
-              borderRadius: '8px',
-              marginBottom: '1rem'
-            }}
-          >
-            {/* PUT CHART HERE */}
-          </div>
-          <button className="btn btn-secondary">Save as PNG</button>
-          
-          <div className="mt-4">
-            <button className="btn btn-success" onClick={runSentimentAnalysis}>
-              {loadingSentiment ? 'Analyzing...' : 'Run Sentiment Analysis'}
-            </button>
-          </div>
-          {sentimentResults && (
-            <div className="mt-3">
-              <h4>Sentiment Analysis Results:</h4>
-              <pre>{JSON.stringify(sentimentResults, null, 2)}</pre>
-            </div>
-          )}
-        </div>
+        <h2>Sentiment Analysis</h2>
+        {/* {sentimentResults && (
+          <pre style={{ background: '#eee', padding: '10px' }}>
+            {JSON.stringify(sentimentResults, null, 2)}
+          </pre>
+        )} */}
+
+        <button className="btn btn-success" onClick={runSentimentAnalysis}>
+          {loadingSentiment ? 'Analyzing...' : 'Run Sentiment Analysis'}
+        </button>
+        {sentimentResults &&
+  sentimentResults.result &&
+  sentimentResults.result.groups &&
+  sentimentResults.result.groups.map((group, groupIndex) => (
+    <div key={groupIndex} className="group-section mt-3">
+      <h4>Group {group.group}: {group.llmLabel}</h4>
+      <SentimentTable group={group} />
+    </div>
+))}
+
+      </div>
       </div>
 
       {/* Main Results DataTable */}

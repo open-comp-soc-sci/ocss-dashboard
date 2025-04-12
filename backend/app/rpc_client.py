@@ -20,8 +20,8 @@ class TopicModelRpcClient:
             )
         )
         self.channel = self.connection.channel()
-        # Declare an exclusive callback queue for responses.
-        result = self.channel.queue_declare(queue='', exclusive=True)
+        # Set auto_delete=True so that the exclusive queue is removed after use.
+        result = self.channel.queue_declare(queue='', exclusive=True, auto_delete=True)
         self.callback_queue = result.method.queue
 
         self.channel.basic_consume(
