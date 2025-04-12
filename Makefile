@@ -9,7 +9,7 @@ hello: down
 
 
 down:
-	docker compose down -v
+	docker compose down
 
 logs:
 	docker compose logs -f
