@@ -12,6 +12,8 @@ import 'pdfmake/build/vfs_fonts.js';
 import 'datatables.net-buttons/js/buttons.html5.min';
 import 'datatables.net-buttons/js/buttons.print.min';
 import SentimentTable from './SentimentTable';
+import handleNotify from './toast';
+import { ToastContainer } from 'react-toastify';
 
 
 function Data() {
@@ -28,6 +30,7 @@ function Data() {
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
   const [dataMessage, setDataMessage] = useState(false);
+  const [subredditIcon, setSubredditIcon] = useState(null);
 
   // This ref controls whether the main results DataTable should fetch data
   const tableInitializedRef = useRef(false);
@@ -264,6 +267,9 @@ function Data() {
           tableInitializedRef.current = true;
           if ($.fn.DataTable.isDataTable("#click-table")) {
             $("#click-table").DataTable().ajax.reload();
+          }
+          if (subreddit) {
+            getSubredditIcon(subreddit);
           }
         });
       }, 50);
@@ -526,6 +532,9 @@ function Data() {
     if ($.fn.DataTable.isDataTable("#click-table")) {
       $("#click-table").DataTable().ajax.reload();
     }
+    if (subreddit) {
+      getSubredditIcon(subreddit);
+    }
   };
 
   const runSentimentAnalysis = async () => {
@@ -557,6 +566,27 @@ function Data() {
     }
   };  
 
+  useEffect(() => {
+    if (sentimentResults) {
+      handleNotify();
+    }
+  }, [sentimentResults]);
+
+  const getSubredditIcon = async (subReddit) => {
+    try {
+      const response = await fetch(`https://www.reddit.com/r/${subReddit}/about.json`);
+      const data = await response.json();
+      const subredditIcon = data.data.icon_img;
+
+      if (!subredditIcon) {
+        setSubredditIcon('../public/reddit-1.svg');
+      } else {
+        setSubredditIcon(subredditIcon);
+      }
+    } catch (error) {
+      setSubredditIcon('../public/reddit-1.svg');
+    }
+  };
 
   return (
     <div className="container mt-5">
@@ -684,32 +714,54 @@ function Data() {
         {/* Sentiment Analysis Section */}
         
         <div className="col-md-8">
-        <h2>Sentiment Analysis</h2>
-        {/* {sentimentResults && (
-          <pre style={{ background: '#eee', padding: '10px' }}>
-            {JSON.stringify(sentimentResults, null, 2)}
-          </pre>
-        )} */}
+          <h2>Sentiment Analysis</h2>
+          <p>Posts within the selected date range.</p>
+          <div
+            style={{
+              backgroundColor: '#333',
+              height: '350px',
+              borderRadius: '8px',
+              marginBottom: '1rem'
+            }}
+          >
+            {/* PUT CHART HERE */}
+          </div>
+          <button className="btn btn-secondary">Save as PNG</button>
 
-        <button className="btn btn-success" onClick={runSentimentAnalysis}>
-          {loadingSentiment ? 'Analyzing...' : 'Run Sentiment Analysis'}
-        </button>
-        {sentimentResults &&
-  sentimentResults.result &&
-  sentimentResults.result.groups &&
-  sentimentResults.result.groups.map((group, groupIndex) => (
-    <div key={groupIndex} className="group-section mt-3">
-      <h4>Group {group.group}: {group.llmLabel}</h4>
-      <SentimentTable group={group} />
-    </div>
-))}
-
-      </div>
+          <div className="mt-4">
+            <button className="btn btn-success" onClick={runSentimentAnalysis}>
+              {loadingSentiment ? 'Analyzing...' : 'Run Sentiment Analysis'}
+            </button>
+          </div>
+          <ToastContainer />
+          {sentimentResults && (
+            <div className="mt-3">
+              <h4>Sentiment Analysis Results:</h4>
+              <pre>{JSON.stringify(sentimentResults, null, 2)}</pre>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Results DataTable */}
       <div className="mt-5">
-        <h2>Results</h2>
+        <div className="mt-4 text-left d-flex">
+          <h2>Results for r/{subreddit}</h2>
+          {subredditIcon && (
+            <img
+              src={subredditIcon}
+              alt="Subreddit Icon"
+              style={{
+                maxWidth: '100px',
+                maxHeight: '100px',
+                border: '5px solid white',
+                borderRadius: '50%',
+                transform: 'translateY(-30px)',
+                marginLeft: '10px'
+              }}
+            />
+          )}
+        </div>
         <h5>{dataMessage && <div style={{ color: 'red' }}>Data contains 3000 rows or less and may be insufficient.</div>}</h5>
         <div>
           <table id="click-table" className="display">
