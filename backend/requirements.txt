@@ -9,3 +9,4 @@ pika
 rabbitmq
 pandas
 openpyxl
+pyarrow

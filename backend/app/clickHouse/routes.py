@@ -1,6 +1,8 @@
 from flask import jsonify, request, Response
 from clickhouse_connect import get_client
 from dotenv import load_dotenv
+import pyarrow as pa
+import pyarrow.ipc as ipc
 from queue import Queue
 import os
 import json
@@ -13,6 +15,7 @@ import io
 import pandas as pd
 from openpyxl import Workbook
 from io import BytesIO
+import time
 
 load_dotenv()
 
@@ -103,8 +106,17 @@ def get_all_click():
         print("Executing query:", query, flush=True)
 
 
+        start_time = time.time()
         result = client.query(query)
+        query_time = time.time() - start_time
+        print(f"first query execution time: {query_time:.4f} seconds", flush=True)
+        print(f"yippee", flush=True)
+        
+        start_time = time.time()
         data = result.result_rows
+        totttall = time.time() - start_time
+        print(f"WOWWWw", flush=True)
+        print(f"Data processing timeeee: {totttall:.4f} seconds", flush=True)
 
 
         # Build the count query.
@@ -114,9 +126,14 @@ def get_all_click():
             count_query = "SELECT COUNT(*) FROM reddit_comments"
         if conditions:
             count_query += " WHERE " + " AND ".join(conditions)
+        start_time = time.time()
         total_result = client.query(count_query)
+        count_query_time = time.time() - start_time
+        print(f"Count query execution time: {count_query_time:.4f} seconds", flush=True)
+        
         total_records = total_result.result_rows[0][0]
 
+        print(f"what am i doing im returning jsonify!!!", flush=True)
 
         return jsonify({
             "draw": draw,
@@ -129,6 +146,74 @@ def get_all_click():
     except Exception as e:
         print(e, flush=True)
         return jsonify({"error": str(e)}), 500
+    finally:
+        release_client(client)
+
+
+@clickHouse_BP.route("/api/get_arrow", methods=["GET"])
+def get_arrow():
+    try:
+        # Retrieve query parameters.
+        subreddit = request.args.get('subreddit', '')
+        start_date = request.args.get('startDate', None)
+        end_date = request.args.get('endDate', None)
+        option = request.args.get('option', 'reddit_comments')  # Default to comments if not specified
+        
+        # Build the base query based on the option.
+        if option == "reddit_submissions":
+            # For submissions, use the title and selftext columns (and id from submissions).
+            base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
+        else:
+            # For comments, use an empty title (since there is no title field) and map body to selftext,
+            # and use parent_id as id.
+            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
+        
+        conditions = []
+        if subreddit:
+            conditions.append(f"subreddit = '{subreddit}'")
+        if start_date:
+            start_date_formatted = start_date.replace("T", " ").split(".")[0]
+            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
+        if end_date:
+            end_date_formatted = end_date.replace("T", " ").split(".")[0]
+            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
+        
+        query = base_query
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_utc DESC"
+        query += " LIMIT 9999999999999 OFFSET 0"
+        
+        client = get_pooled_client()
+        
+        # Use query_arrow to get an Arrow Table directly.
+        start_time = time.time()
+        table = client.query_arrow(query, use_strings=True)
+        query_arrow_time = time.time() - start_time
+        print(f"Query Arrow time: {query_arrow_time:.4f} seconds", flush=True)
+        
+        # Serialize the Arrow Table into a binary stream.
+        start_time = time.time()
+        stream = io.BytesIO()
+        with ipc.new_stream(stream, table.schema) as writer:
+            writer.write_table(table)
+        serialization_time = time.time() - start_time
+        print(f"Arrow serialization time: {serialization_time:.4f} seconds", flush=True)
+        
+        total_time = query_arrow_time + serialization_time
+        print(f"Total Arrow processing time: {total_time:.4f} seconds", flush=True)
+        
+        stream.seek(0)
+        return Response(
+            stream.getvalue(), 
+            mimetype='application/vnd.apache.arrow.stream',
+            headers={"Content-Disposition": "attachment; filename=data.arrow"}
+        )
+    
+    except Exception as e:
+        print(f"Error in get_arrow: {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
+    
     finally:
         release_client(client)
 
