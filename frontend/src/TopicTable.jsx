@@ -2,15 +2,14 @@ import React, { useEffect, useRef } from 'react';
 import $ from 'jquery';
 import 'datatables.net-bs5';
 
-console.log("SentimentTable component loaded");
+console.log("TopicTable component loaded");
 
-const SentimentTable = ({ group }) => {
-  // Declare tableRef using useRef
+const TopicTable = ({ group, showPosts }) => {
   const tableRef = useRef(null);
 
   useEffect(() => {
-    console.log("SentimentTable component mounted for group:", group);
-    // If you want to initialize DataTables later, you can do so here.
+    console.log("TopicTable component mounted for group:", group);
+    // DataTables initialization (if needed) can go here.
   }, [group]);
 
   return (
@@ -21,6 +20,8 @@ const SentimentTable = ({ group }) => {
             <th>Topic Number</th>
             <th>Topic Label</th>
             <th>Keywords</th>
+            <th>Post Count</th>
+            {showPosts && <th>Sample Posts</th>}
           </tr>
         </thead>
         <tbody>
@@ -29,6 +30,14 @@ const SentimentTable = ({ group }) => {
               <td>{topic.topicNumber}</td>
               <td>{topic.topicLabel}</td>
               <td>{topic.ctfidfKeywords}</td>
+              <td>{topic.postCount}</td>
+              {showPosts && (
+                <td>
+                  <pre style={{ whiteSpace: 'pre-wrap' }}>
+                    {topic.samplePosts}
+                  </pre>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -37,4 +46,4 @@ const SentimentTable = ({ group }) => {
   );
 };
 
-export default SentimentTable;
+export default TopicTable;
