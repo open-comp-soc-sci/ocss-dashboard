@@ -576,8 +576,15 @@ function Data() {
     try {
       const response = await fetch(`https://www.reddit.com/r/${subReddit}/about.json`);
       const data = await response.json();
-      const subredditIcon = data.data.icon_img;
-
+      let subredditIcon = data.data.community_icon;
+      
+      // Remove query parameters from the URL by cutting off at the question mark
+      if (subredditIcon && subredditIcon.includes('?')) {
+        subredditIcon = subredditIcon.split('?')[0];
+      }
+      
+      console.log('Cleaned Subreddit Icon:', subredditIcon);
+      
       if (!subredditIcon) {
         setSubredditIcon('../public/reddit-1.svg');
       } else {
