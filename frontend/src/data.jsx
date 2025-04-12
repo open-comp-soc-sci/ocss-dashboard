@@ -734,12 +734,18 @@ function Data() {
             </button>
           </div>
           <ToastContainer />
-          {sentimentResults && (
-            <div className="mt-3">
-              <h4>Sentiment Analysis Results:</h4>
-              <pre>{JSON.stringify(sentimentResults, null, 2)}</pre>
-            </div>
-          )}
+                      <h2>Sentiment Analysis</h2> 
+        {sentimentResults &&
+  sentimentResults.result &&
+  sentimentResults.result.groups &&
+  sentimentResults.result.groups.map((group, groupIndex) => (
+    <div key={groupIndex} className="group-section mt-3">
+      <h4>Group {group.group}: {group.llmLabel}</h4>
+      <SentimentTable group={group} />
+    </div>
+))}
+
+      
         </div>
       </div>
 
