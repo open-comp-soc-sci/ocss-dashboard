@@ -156,6 +156,7 @@ def get_arrow():
     try:
         # Retrieve query parameters.
         subreddit = request.args.get('subreddit', '')
+        subreddit = subreddit.lower()
         start_date = request.args.get('startDate', None)
         end_date = request.args.get('endDate', None)
         option = request.args.get('option', 'reddit_comments')  # Default to comments if not specified
@@ -232,6 +233,7 @@ def run_sentiment():
             "endDate": request_data.get("endDate", "")          # Passed as ISO string
             # Add any additional parameters as needed.
         }
+        parameters['subreddit'] = parameters['subreddit'].lower()
         message = json.dumps(parameters)
         rpc_client = TopicModelRpcClient()
         result = rpc_client.call(message)
@@ -246,6 +248,7 @@ def export_data():
     try:
         option = request.args.get('option', default='reddit_submissions')
         subreddit = request.args.get('subreddit', '', type=str)
+        subreddit = subreddit.lower()
         client = get_pooled_client()
         search_value = request.args.get('search[value]', '', type=str)
         sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
