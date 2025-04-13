@@ -56,6 +56,7 @@ def get_all_click():
         draw = request.args.get('draw', default=1, type=int)
         option = request.args.get('option', default='reddit_submissions')
         subreddit = request.args.get('subreddit', '', type=str)
+        subreddit = subreddit.lower()
         client = get_pooled_client()
         search_value = request.args.get('search[value]', '', type=str)
         sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
