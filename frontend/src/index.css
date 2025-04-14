@@ -5,3 +5,17 @@ div.dt-length > select#dt-length-2 {
   min-width: 80px !important;
   display: inline-block;
 }
+
+.dataTables_length select {
+  font-size: 12px;       /* Adjust font size as needed */
+  width: 60px;           /* Adjust width as needed */
+  padding: 2px 4px;      /* Adjust padding for better appearance */
+}
+.dt-button {
+  color: #fff !important;
+}
+
+.dt-scroll-sizing {
+  height: 0 !important;
+  overflow: hidden !important;
+}

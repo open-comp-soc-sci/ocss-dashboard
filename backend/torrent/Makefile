@@ -23,6 +23,7 @@ run: stop
 		-e CLICKHOUSE_PASSWORD=heyheyhey \
 		-v $(LOCAL_DB_DIR):$(CONTAINER_DB_DIR) \
 		-v $(LOCAL_DIR):$(CONTAINER_DIR) \
+		--restart=always \
 		$(IMAGE_NAME)
 
 ## Stop and remove the container if it exists
