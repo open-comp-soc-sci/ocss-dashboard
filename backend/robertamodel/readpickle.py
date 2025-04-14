@@ -1,23 +1,61 @@
-import pickle
+import json
 import pandas as pd
+import requests
+from roberta import run_roberta_analysis
 
-with open('backend/robertamodel/full_db.pickle', "rb") as file:
-    df = pd.read_pickle(file)
+# Load grouping results
+with open("grouping_results.json") as f:
+    grouping_data = json.load(f)
 
-terms = ["mvd", "nerve pain", "opioids", "pregabalin", 
-         "carbamazepine", "carbamazapine", "oxcarbazepine", "oxcarbazapine"]
+meta = grouping_data["meta"]
+groups = grouping_data["groups"]
+
+# Get API parameters from meta
+subreddit = meta["subreddit"]
+option = meta["option"]
+startDate = meta.get("startDate", "")
+endDate = meta.get("endDate", "")
+
+# Build API URL
+api_url = f"http://sunshine.cise.ufl.edu:5000/api/get_all_click?subreddit={subreddit}&option={option}"
+if startDate: api_url += f"&startDate={startDate}"
+if endDate: api_url += f"&endDate={endDate}"
+
+# Fetch data
+response = requests.get(api_url)
+response.raise_for_status()
+data = response.json()
+
+# Convert to DataFrame
+if option == "reddit_submissions":
+    df = pd.DataFrame(data["data"], columns=["id", "subreddit", "title", "selftext", "created_utc"])
+    df = df.rename(columns={"selftext": "body"})
+else:
+    df = pd.DataFrame(data["data"], columns=["subreddit", "title", "body", "created_utc", "id"])
 
 df = df.fillna("")
 
-# Initialize a dictionary where each term maps to an empty list
-term_bodies = {term: [] for term in terms}
+# Prepare grouped terms and sectioned_bodies
+all_group_terms = []  # List of term lists
+all_sectioned_bodies = []
 
-# Iterate through each body in the DataFrame
-for body in df["body"]:
-    lower_body = body.lower()
-    for term in terms:
-        if term in lower_body:
-            term_bodies[term].append(body)
+for group in groups.values():
+    for topic in group:
+        keywords = topic["ctfidf_keywords"]
+        terms = [kw.strip() for kw in keywords.split(",")]
+        all_group_terms.append(terms)
 
-# Convert dictionary values to a list of lists
-sectioned_bodies = [term_bodies[term] for term in terms]
+        # Filter posts by keywords
+        term_bodies = {term: [] for term in terms}
+        for body in df["body"]:
+            lower_body = body.lower()
+            for term in terms:
+                if term in lower_body:
+                    term_bodies[term].append(body)
+
+        sectioned_bodies = [term_bodies[term] for term in terms]
+        all_sectioned_bodies.append((terms, sectioned_bodies))
+
+for terms, sectioned_bodies in all_sectioned_bodies:
+    stats = run_roberta_analysis(terms, sectioned_bodies)
+    print(stats)
