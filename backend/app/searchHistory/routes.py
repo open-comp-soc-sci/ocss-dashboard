@@ -9,6 +9,7 @@ from . import searchHistory_BP
 def addSearch():
     data = request.get_json()
     subreddit = data.get("subreddit")
+    subreddit = subreddit.lower()
     sentimentKeywords = data.get("sentimentKeywords")
     startDate = data.get("startDate")
     endDate = data.get("endDate")

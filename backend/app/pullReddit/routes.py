@@ -5,7 +5,8 @@ from . import pullReddit_BP
 #NOT IMPLMENTED YET, WIP
 @pullReddit_BP.route('/api/pullReddit/generate', methods=['GET'])
 def pullReddit():
-    subreddit = request.args.get('subreddit', None)
+    subreddit = request.args.get('subreddit', '')
+    subreddit = subreddit.lower()
     numberToPull = request.args.get('numberToPull', type=int, default=2000)
 
     result = subprocess.run(
