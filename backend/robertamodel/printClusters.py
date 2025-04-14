@@ -5,7 +5,7 @@ import numpy as np
 class ClusterPrintingTest:
     def __init__(self):
         # Connect to RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq", port=5672))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost", port=5672))
         channel = connection.channel()
 
         # Declare the same queue
@@ -21,16 +21,15 @@ class ClusterPrintingTest:
 
     def receive_groups(self, ch, method, properties, body):
         try:
-            # Decode and load the cluster data
-            cluster_data = np.array(json.loads(body))
-            print("\nReceived Cluster Data:", cluster_data)
+            # Decode and load the cluster JSON message
+            decoded_json = json.loads(body)
+            print("\nReceived Cluster Data JSON")
 
-            # Process each cluster
-            for group in range(1, cluster_data.max() + 1):
-                topics_group_i = np.where(cluster_data == group)[0]
-                print(f"Group #{group} contains the indices {topics_group_i}")
+            # Save JSON to file for reuse
+            with open("grouping_results.json", "w") as f:
+                json.dump(decoded_json, f, indent=2)
 
-            # Acknowledge the message
+            # Acknowledge message
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
         except Exception as e:
