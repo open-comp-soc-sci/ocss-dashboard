@@ -5,7 +5,8 @@ import numpy as np
 class ClusterPrintingTest:
     def __init__(self):
         # Connect to RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="rabbitmq", port=5672))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="sunshine.cise.ufl.edu", port=5672, 
+                                                                       credentials=pika.PlainCredentials("user", "password")))
         channel = connection.channel()
         # Declare the same queue
         channel.queue_declare(queue="grouping_results", durable=True)
@@ -19,6 +20,7 @@ class ClusterPrintingTest:
     def receive_groups(self, ch, method, properties, body):
         self.groups =  np.array(json.loads(body))
         print("Received Data")
+        print(body)
 
         # Simulate processing each cluster
         for group in range(1, self.groups.max() + 1):
