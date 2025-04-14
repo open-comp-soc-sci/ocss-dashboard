@@ -158,15 +158,23 @@ def get_arrow():
         start_date = request.args.get('startDate', None)
         end_date = request.args.get('endDate', None)
         option = request.args.get('option', 'reddit_comments')  # Default to comments if not specified
-        
-        # Build the base query based on the option.
-        if option == "reddit_submissions":
-            # For submissions, use the title and selftext columns (and id from submissions).
-            base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
-        else:
-            # For comments, use an empty title (since there is no title field) and map body to selftext,
-            # and use parent_id as id.
-            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
+        search_value = request.args.get('search_value', '', type=str)
+
+        if ',' in option:
+            # If both options are selected, use a UNION ALL query.
+            base_query = (
+                "SELECT * FROM ("
+                "    (SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions) "
+                "    UNION ALL "
+                "    (SELECT subreddit, author, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
+                ") AS combined"
+            )
+        elif option == "reddit_submissions":
+            base_query = "SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions"
+        elif option == "reddit_comments":
+            base_query = "SELECT subreddit, author, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
+
+
         
         conditions = []
         if subreddit:
@@ -177,6 +185,11 @@ def get_arrow():
         if end_date:
             end_date_formatted = end_date.replace("T", " ").split(".")[0]
             conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
+        if search_value:
+            conditions.append(f"selftext LIKE '%{search_value}%'")
+
+        # Add condition to filter out posts by AutoModerator.
+        conditions.append("author != 'AutoModerator'")
         
         query = base_query
         if conditions:
@@ -239,36 +252,44 @@ def run_sentiment():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-   
+
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
 def export_data():
     try:
         option = request.args.get('option', default='reddit_submissions')
         subreddit = request.args.get('subreddit', '', type=str)
-        client = get_pooled_client()
-        search_value = request.args.get('search[value]', '', type=str)
+        # Read our search parameter from a simpler key.
+        search_value = request.args.get('search_value', '', type=str)
         sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
         start_date = request.args.get('startDate', None, type=str)
         end_date = request.args.get('endDate', None, type=str)
         export_format = request.args.get('format', default='csv')
 
-        if option == "reddit_submissions":
+
+        if ',' in option:
+            # If both options are selected, use a UNION ALL query.
+            base_query = (
+                "SELECT * FROM ("
+                "    (SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions) "
+                "    UNION ALL "
+                "    (SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
+                ") AS combined"
+            )
+        elif option == "reddit_submissions":
             base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
         elif option == "reddit_comments":
             base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
+
         else:
             return jsonify({"error": "Invalid option provided."}), 400
-
         conditions = []
         if subreddit:
             conditions.append(f"subreddit = '{subreddit}'")
+        # Use search_value to filter by the body/selftext column.
         if search_value:
-            if option == "reddit_submissions":
-                conditions.append(f"(subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%')")
-            else:
-                conditions.append(f"(subreddit LIKE '%{search_value}%' OR body LIKE '%{search_value}%')")
+            conditions.append(f"selftext LIKE '%{search_value}%'")
         if sentiment_keywords:
-            if option == "reddit_submissions":
+            if "reddit_submissions" in option:
                 conditions.append(f"(title LIKE '%{sentiment_keywords}%' OR selftext LIKE '%{sentiment_keywords}%')")
             else:
                 conditions.append(f"(body LIKE '%{sentiment_keywords}%')")
@@ -284,45 +305,56 @@ def export_data():
             query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY created_utc DESC"
 
-        result = client.query(query)
-        rows = result.result_rows
-        columns = ['Subreddit', 'Title', 'Text', 'Created UTC', 'Post Link']
-        formatted_rows = [
-            [row[0], row[1], row[2], row[3], f"https://reddit.com/r/{row[0]}/comments/{row[4]}"]
-            for row in rows
-        ]
+        client = get_pooled_client()
+        table = client.query_arrow(query, use_strings=True)
 
-        if export_format == 'csv':
-            output = io.StringIO()
-            writer = csv.writer(output)
-            writer.writerow(columns)
-            writer.writerows(formatted_rows)
-            output.seek(0)
-            return Response(output, mimetype='text/csv', headers={
-                "Content-Disposition": "attachment; filename=reddit_export.csv"
-            })
-        elif export_format == 'excel':
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Reddit Export"
-            ws.append(columns)
-
-            for row in formatted_rows:
-                ws.append(row)
-
+        # Process different export formats...
+        if export_format == 'excel':
+            df = table.to_pandas()
+            import pytz
+            local_tz = pytz.timezone("America/New_York")  # Adjust to your timezone.
+            if 'created_utc' in df.columns:
+                if pd.api.types.is_datetime64tz_dtype(df['created_utc']):
+                    df['created_utc'] = df['created_utc'].dt.tz_convert(local_tz).dt.tz_localize(None)
+                else:
+                    df['created_utc'] = pd.to_datetime(df['created_utc'], utc=True).dt.tz_convert(local_tz).dt.tz_localize(None)
             output = BytesIO()
-            wb.save(output)
+            df.to_excel(output, index=False, sheet_name="Reddit Export")
             output.seek(0)
-            return Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                        headers={"Content-Disposition": "attachment; filename=reddit_export.xlsx"})
-
-        #PDF Issue with default latin-1 encoding, maybe swap from FPDF
-        #Maybe try with reportlab and canvas
+            # Dynamically name the file using the subreddit value.
+            filename = f"{subreddit}.xlsx" if subreddit else "reddit_export.xlsx"
+            return Response(
+                output.getvalue(),
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+        elif export_format == 'csv':
+            df = table.to_pandas()
+            output = io.StringIO()
+            df.to_csv(output, index=False)
+            output.seek(0)
+            return Response(
+                output.getvalue(), 
+                mimetype='text/csv', 
+                headers={"Content-Disposition": f"attachment; filename={subreddit}.csv" if subreddit else "attachment; filename=reddit_export.csv"}
+            )
         elif export_format == 'json':
-            return formatted_rows
+            df = table.to_pandas()
+            return jsonify(df.to_dict(orient='records'))
+        elif export_format == 'arrow':
+            stream = io.BytesIO()
+            with ipc.new_stream(stream, table.schema) as writer:
+                writer.write_table(table)
+            stream.seek(0)
+            return Response(
+                stream.getvalue(), 
+                mimetype='application/vnd.apache.arrow.stream',
+                headers={"Content-Disposition": "attachment; filename=data.arrow"}
+            )
+        else:
+            return jsonify({"error": "Unsupported export format."}), 400
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         release_client(client)
-
