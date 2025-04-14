@@ -20,18 +20,21 @@ import { ToastContainer } from 'react-toastify';
 function Data() {
   const [subreddit, setSubreddit] = useState('survivor');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
-  const [startDate, setStartDate] = useState(new Date('2024-12-01'));
-  const [endDate, setEndDate] = useState(new Date('2024-12-30'));
+  const [startDate, setStartDate] = useState(new Date(2024, 11, 25)); // December 25, 2024
+  const [endDate, setEndDate] = useState(new Date(2024, 11, 31));     // December 31, 2024
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
   const [option, setOption] = useState("reddit_submissions");
-  const [selectedOption, setSelectedOption] = useState("reddit_submissions");
   const [clusteringResults, setClusteringResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
   const [dataMessage, setDataMessage] = useState(false);
   const [subredditIcon, setSubredditIcon] = useState(null);
+  // Add these new state variables at the top along with your others.
+  const [includeSubmissions, setIncludeSubmissions] = useState(true);
+  const [includeComments, setIncludeComments] = useState(true);
+
 
   // This ref controls whether the main results DataTable should fetch data
   const tableInitializedRef = useRef(false);
@@ -136,14 +139,21 @@ function Data() {
 
   const fetchArrowData = async (start, length, draw, searchValue) => {
     try {
-      // Build the URL for the Arrow endpoint.
-      const url = `/api/get_arrow?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(selectedOption)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(endDate.toISOString())}`;
+      const adjustedEndDate = new Date(endDate);
+      adjustedEndDate.setHours(23, 59, 59, 999);
+      
+      // Example for fetchArrowData:
+      let url = `/api/get_arrow?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(option)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(adjustedEndDate.toISOString())}`;
+
+      if (searchValue) {
+        url += `&search_value=${encodeURIComponent(searchValue)}`;
+      }
       
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch Arrow data: ${response.statusText}`);
       }
-      
+
       // Get the binary data
       const arrayBuffer = await response.arrayBuffer();
       
@@ -373,10 +383,10 @@ function Data() {
         serverSide: true,
         paging: true,
         pagingType: "full_numbers",
-        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'B>>" +
-          "<'row'<'col-sm-12'tr>>" +
-          "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
-        searching: false,
+        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'fB>>" +
+        "<'row'<'col-sm-12'tr>>" +
+        "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+        searching: true,
         ajax: function (data, callback, settings) {
           if (!tableInitializedRef.current) {
             callback({
@@ -447,19 +457,43 @@ function Data() {
           {
             text: 'Excel',
             action: function () {
-              window.open(`/api/export_data?format=excel&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
+              const dt = $("#click-table").DataTable(); // Get the DataTables instance.
+              const search_value = dt.search() || "";
+              window.open(
+                `/api/export_data?format=excel&subreddit=${subreddit}` +
+                `&option=${option}&sentimentKeywords=${sentimentKeywords}` +
+                `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}` +
+                `&search_value=${encodeURIComponent(search_value)}`,
+                '_blank'
+              );
             }
           },
           {
             text: 'CSV',
             action: function () {
-              window.open(`/api/export_data?format=csv&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
+              const dt = $("#click-table").DataTable(); // Get the DataTables instance.
+              const search_value = dt.search() || "";
+              window.open(
+                `/api/export_data?format=csv&subreddit=${subreddit}` +
+                `&option=${option}&sentimentKeywords=${sentimentKeywords}` +
+                `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}` +
+                `&search_value=${encodeURIComponent(search_value)}`,
+                '_blank'
+              );
             }
           },
           {
             text: 'JSON',
             action: function () {
-              window.open(`/api/export_data?format=json&subreddit=${subreddit}&option=${selectedOption}&sentimentKeywords=${sentimentKeywords}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`, '_blank');
+              const dt = $("#click-table").DataTable(); // Get the DataTables instance.
+              const search_value = dt.search() || "";
+              window.open(
+                `/api/export_data?format=json&subreddit=${subreddit}` +
+                `&option=${option}&sentimentKeywords=${sentimentKeywords}` +
+                `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}` +
+                `&search_value=${encodeURIComponent(search_value)}`,
+                '_blank'
+              );
             }
           },
           {
@@ -511,7 +545,7 @@ function Data() {
         $("#click-table").DataTable().destroy();
       }
     };
-  }, [subreddit, selectedOption, sentimentKeywords, startDate, endDate]);
+  }, [subreddit, option, sentimentKeywords, startDate, endDate]);
 
   useEffect(() => {
     if (clusteringResults && clusteringResults.groups) {
@@ -543,9 +577,17 @@ function Data() {
   // When Submit is clicked, mark table as initialized and reload the DataTable.
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setOption(selectedOption);
+    setClusteringResults(null);
+    // Build a comma-separated string, e.g., "reddit_submissions,reddit_comments"
+    const options = [];
+    if (includeSubmissions) options.push("reddit_submissions");
+    if (includeComments) options.push("reddit_comments");
+    const combinedOption = options.join(",");
+    setOption(combinedOption);
+    
+    
     setError(null);
-    await AddSearch();
+    await AddSearch();  // (Make sure AddSearch also passes along the chosen option if needed.)
     tableInitializedRef.current = true;
     if ($.fn.DataTable.isDataTable("#click-table")) {
       $("#click-table").DataTable().ajax.reload();
@@ -554,20 +596,34 @@ function Data() {
       getSubredditIcon(subreddit);
     }
   };
+  
 
   const runSentimentAnalysis = async () => {
-    // Clear previous results
-    setClusteringResults(null);
-    
-    setLoadingSentiment(true);
-    setError(null);
+  // Combine the current checkbox values on the fly.
+  let combinedOption = "";
+  if (includeSubmissions && includeComments) {
+    combinedOption = "reddit_submissions,reddit_comments";
+  } else if (includeSubmissions) {
+    combinedOption = "reddit_submissions";
+  } else if (includeComments) {
+    combinedOption = "reddit_comments";
+  } else {
+    // You could default to one or show an error if neither is selected.
+    combinedOption = "";
+  }
+
+  // Clear previous results.
+  setClusteringResults(null);
+  setLoadingSentiment(true);
+  setError(null);
+
     try {
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subreddit,
-          option: selectedOption,
+          option: combinedOption, // or option: option,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         })
@@ -697,37 +753,34 @@ function Data() {
             </div>
 
             <div className="mt-4">
-              <h2>Search Options</h2>
-              <div className="form-group">
-                <label>Choose to view Reddit submissions or comments.</label>
-                <div>
-                  <label className="form-check-label">
-                    <input
-                      type="radio"
-                      className="form-check-input"
-                      name="option"
-                      value="reddit_submissions"
-                      checked={selectedOption === "reddit_submissions"}
-                      onChange={() => setSelectedOption("reddit_submissions")}
-                    />
-                    Submissions
-                  </label>
-                </div>
-                <div>
-                  <label className="form-check-label">
-                    <input
-                      type="radio"
-                      className="form-check-input"
-                      name="option"
-                      value="reddit_comments"
-                      checked={selectedOption === "reddit_comments"}
-                      onChange={() => setSelectedOption("reddit_comments")}
-                    />
-                    Comments
-                  </label>
-                </div>
+            <h2>Search Options</h2>
+            <div className="form-group">
+              <label>Choose which data to view:</label>
+              <div>
+                <label className="form-check-label">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={includeSubmissions}
+                    onChange={() => setIncludeSubmissions(!includeSubmissions)}
+                  />
+                  Submissions
+                </label>
+              </div>
+              <div>
+                <label className="form-check-label">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={includeComments}
+                    onChange={() => setIncludeComments(!includeComments)}
+                  />
+                  Comments
+                </label>
               </div>
             </div>
+          </div>
+
 
             <div className="mt-4">
               <button type="submit" className="btn btn-primary mt-2">Submit</button>
@@ -788,7 +841,7 @@ function Data() {
                 maxWidth: '100px',
                 maxHeight: '100px',
                 border: '5px solid white',
-                borderRadius: '50%',
+                borderRadius: '50%',  
                 transform: 'translateY(-30px)',
                 marginLeft: '10px'
               }}
@@ -799,13 +852,13 @@ function Data() {
         <div>
           <table id="click-table" className="display">
             <thead>
-              <tr>
+              {/* <tr>
                 <th>Subreddit</th>
                 <th>Title</th>
                 <th>Body</th>
                 <th>Created UTC</th>
                 <th>Post Link</th>
-              </tr>
+              </tr> */}
             </thead>
             <tbody></tbody>
           </table>
