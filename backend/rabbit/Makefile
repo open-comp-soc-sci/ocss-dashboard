@@ -8,8 +8,8 @@ rabbit:
 	-p 5672:5672 -p 15672:15672 \
 	rabbitmq:management
 
-run:
-	docker run --network=mynetwork --name msg_test_container msg_test python3 printClusters.py
+run: down build
+	docker run --name msg_test_container msg_test
 
 logs:
 	docker logs -f msg_test_container
