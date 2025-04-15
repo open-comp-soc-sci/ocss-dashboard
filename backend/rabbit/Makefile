@@ -9,7 +9,8 @@ rabbit:
 	rabbitmq:management
 
 run: down build
-	docker run --name msg_test_container msg_test
+	docker run --name msg_test_container -v $(PWD):/app msg_test
+
 
 logs:
 	docker logs -f msg_test_container
