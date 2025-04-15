@@ -18,7 +18,7 @@ import { ToastContainer } from 'react-toastify';
 
 
 function Data() {
-  const [subreddit, setSubreddit] = useState('survivor');
+  const [subreddit, setSubreddit] = useState('TrigeminalNeuralgia');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
   const [startDate, setStartDate] = useState(new Date(2024, 11, 25)); // December 25, 2024
   const [endDate, setEndDate] = useState(new Date(2024, 11, 31));     // December 31, 2024
