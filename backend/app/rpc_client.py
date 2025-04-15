@@ -6,7 +6,12 @@ import json
 class TopicModelRpcClient:
     def __init__(self):
         # Retrieve RabbitMQ connection details from environment variables.
-        rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+        print('heres rpc client')
+        print('RUNNINGLOCAL', os.getenv('RUNNINGLOCAL'))
+        if os.getenv('RUNNINGLOCAL') == 'true':
+            rabbitmq_host = os.getenv('RABBITMQ_HOST', 'sunshine.cise.ufl.edu')
+        else:
+            rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
         rabbitmq_user = os.getenv('RABBITMQ_USER', 'user')
         rabbitmq_pass = os.getenv('RABBITMQ_PASS', 'password')
         
