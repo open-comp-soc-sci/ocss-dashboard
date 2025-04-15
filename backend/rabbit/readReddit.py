@@ -4,7 +4,7 @@ import requests
 from roberta import run_roberta_analysis
 
 # Load grouping results
-with open("grouping_results.json") as f:
+with open("grouping_results.json", "r") as f:
     grouping_data = json.load(f)
 
 meta = grouping_data["meta"]
@@ -17,12 +17,12 @@ startDate = meta.get("startDate", "")
 endDate = meta.get("endDate", "")
 
 # Build API URL
-api_url = f"http://sunshine.cise.ufl.edu:5000/api/get_all_click?subreddit={subreddit}&option={option}"
+api_url = f"https://sunshine.cise.ufl.edu:5000/api/get_all_click?subreddit={subreddit}&option={option}"
 if startDate: api_url += f"&startDate={startDate}"
 if endDate: api_url += f"&endDate={endDate}"
 
 # Fetch data
-response = requests.get(api_url)
+response = requests.get(api_url, verify=False)
 response.raise_for_status()
 data = response.json()
 
