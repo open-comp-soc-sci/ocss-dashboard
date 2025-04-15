@@ -120,7 +120,7 @@ class TopicModeling():
             # Build the API URL and append date parameters if provided.
             print('fetching from clickhouse')
 
-            api_url = f"http://CH_HOST:5000/api/get_all_click?subreddit={subreddit}&option={option}"
+            api_url = f"https://CH_HOST:5000/api/get_all_click?subreddit={subreddit}&option={option}"
             if start_date:
                 api_url += f"&startDate={start_date}"
             if end_date:

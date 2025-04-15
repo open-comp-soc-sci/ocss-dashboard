@@ -7,4 +7,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY printClusters.py /app/
+COPY readReddit.py /app/
+COPY roberta.py /app/
 CMD ["python", "printClusters.py"]
