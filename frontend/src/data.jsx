@@ -26,7 +26,7 @@ function Data() {
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
   const [searchError, setSearchError] = useState(null);
-  const [option, setOption] = useState("reddit_submissions");
+  const [option, setOption] = useState("reddit_submissions, reddit_comments");
   const [clusteringResults, setClusteringResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
@@ -49,16 +49,16 @@ function Data() {
         const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
 
         if (!response.ok) {
-          setError('Search history failed to fetch from Flask.');
+          setSearchError('Search history failed to fetch from Flask.');
         }
         else {
-          setError(null);
+          setSearchError(null);
         }
 
         const data = await response.json();
         setSearchData(data.search_history || []);
       } catch (error) {
-        setError(error.message);
+        setSearchError(error.message);
       }
     };
     fetchSearchHistory();
@@ -81,7 +81,7 @@ function Data() {
           sentimentKeywords: sentimentKeywords,
           startDate: startDate,
           endDate: endDate,
-          searchTerms: searchTerms,
+          option: option,
           email: email,
         }),
       });
@@ -100,7 +100,7 @@ function Data() {
       const data2 = await response2.json();
       setSearchData(data2.search_history || []);
     } catch (error) {
-      setError(error.message);
+      setSearchError(error.message);
     }
   };
 
@@ -239,9 +239,9 @@ function Data() {
     }
   };
 
-
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
+    console.log(searchData);
     if (searchData.length === 0) {
       document.getElementById("clear-all-container").style.display = 'none';
     } else {
@@ -271,18 +271,34 @@ function Data() {
                 return new Date(data).toLocaleDateString('en-US');
               }
             },
+            {
+              data: "option",
+              title: "Post Option",
+              render: function (data) {
+                if (!data) return "";
+
+                const options = data.split(",").map(opt => opt.trim());
+                const labels = options.map(opt => {
+                  if (opt === "reddit_comments") return "Comments";
+                  if (opt === "reddit_submissions") return "Submissions";
+                  return opt;
+                });
+
+                return labels.join(", ");
+              }
+            },
             { data: "created_utc", title: "Created Date" },
             {
               data: null,
               title: "Actions",
               render: function (data, type, row) {
-                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" disabled>Go To Search</a>`;
+                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
                 const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}" disabled>Delete</button>`;
                 return searchButton + " " + deleteButton;
               }
             }
           ],
-          order: [[4, 'desc']],
+          order: [[5, 'desc']],
           paging: false,
           searching: false,
           ordering: false,
@@ -322,18 +338,34 @@ function Data() {
             return new Date(data).toLocaleDateString('en-US');
           }
         },
+        {
+          data: "option",
+          title: "Post Option",
+          render: function (data) {
+            if (!data) return "";
+
+            const options = data.split(",").map(opt => opt.trim());
+            const labels = options.map(opt => {
+              if (opt === "reddit_comments") return "Comments";
+              if (opt === "reddit_submissions") return "Submissions";
+              return opt;
+            });
+
+            return labels.join(", ");
+          }
+        },
         { data: "created_utc", title: "Created Date" },
         {
           data: null,
           title: "Actions",
           render: function (data, type, row) {
-            const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}">Go To Search</a>`;
+            const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
             const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}">Delete</button>`;
             return searchButton + " " + deleteButton;
           }
         }
       ],
-      order: [[4, 'desc']],
+      order: [[5, 'desc']],
       paging: true,
       searching: false,
       ordering: true,
@@ -361,12 +393,14 @@ function Data() {
       const sentiment = $(this).data("sentiment");
       const startDate = new Date($(this).data("start-date"));
       const endDate = new Date($(this).data("end-date"));
-      const searchValue = `${subreddit} ${sentiment} ${startDate.toISOString()} ${endDate.toISOString()}`;
+      const option = $(this).data("option");
+      const searchValue = `${subreddit} ${sentiment} ${startDate.toISOString()} ${endDate.toISOString()} ${option}`;
 
       setSubreddit(subreddit);
       setSentimentKeywords(sentiment);
       setStartDate(startDate);
       setEndDate(endDate);
+      setOption(option);
 
       //issue where go to needs to be clicked twice
       setTimeout(() => {
@@ -405,13 +439,14 @@ function Data() {
   const fetchData = async (start, length, draw, searchValue) => {
     try {
       const response = await fetch(
-        `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
+        `/api/get_arrow?length=${length}&start=${start}&draw=${draw}` +
         `&subreddit=${encodeURIComponent(subreddit)}` +
         `&option=${encodeURIComponent(selectedOption)}` +
         `&search_value=${encodeURIComponent(searchValue)}` +
         `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
         `&startDate=${encodeURIComponent(startDate.toISOString())}` +
-        `&endDate=${encodeURIComponent(endDate.toISOString())}`
+        `&endDate=${encodeURIComponent(endDate.toISOString())}` +
+        `&option=${encodeURIComponent(option)}`
       );
       const data = await response.json();
       return data;
@@ -616,8 +651,14 @@ function Data() {
     }
   }, [clusteringResults]);
 
+  //Join the options for both main and search history tables to work.
+  useEffect(() => {
+    const selectedOptions = [];
+    if (includeSubmissions) selectedOptions.push("reddit_submissions");
+    if (includeComments) selectedOptions.push("reddit_comments");
 
-
+    setOption(selectedOptions.join(", "));
+  }, [includeSubmissions, includeComments]);
 
   // When Submit is clicked, mark table as initialized and reload the DataTable.
   const handleSubmit = async (e) => {
@@ -629,7 +670,6 @@ function Data() {
     if (includeComments) options.push("reddit_comments");
     const combinedOption = options.join(",");
     setOption(combinedOption);
-
 
     setError(null);
     await AddSearch();  // (Make sure AddSearch also passes along the chosen option if needed.)
@@ -643,11 +683,20 @@ function Data() {
   };
 
   useEffect(() => {
-    // Automatically run the search on page load.
-    handleSubmit({ preventDefault: () => {} });
+    // Automatically run the search on page load. Adjust to only fetch data and not add to search history.
+    const searchValue = `${subreddit} ${sentimentKeywords} ${startDate.toISOString()} ${endDate.toISOString()}`;
+    setTimeout(() => {
+      fetchData(0, 10, 1, searchValue).then(() => {
+        tableInitializedRef.current = true;
+        if ($.fn.DataTable.isDataTable("#click-table")) {
+          $("#click-table").DataTable().ajax.reload();
+        }
+        if (subreddit) {
+          getSubredditIcon(subreddit);
+        }
+      });
+    }, 50);
   }, []);
-  
-
 
   const runSentimentAnalysis = async () => {
     // Combine the current checkbox values on the fly.
@@ -717,6 +766,32 @@ function Data() {
       }
     } catch (error) {
       setSubredditIcon('../public/reddit-1.svg');
+    }
+  };
+
+  const handleSaveResults = async () => {
+    try {
+      const response = await fetch("/api/save_result", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email,
+          subreddit,
+          startDate: startDate.toISOString().split("T")[0],
+          endDate: endDate.toISOString().split("T")[0]
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(`Failed to save: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error saving result:", error);
+      setError("An error occurred while saving the result.");
     }
   };
 
@@ -876,6 +951,14 @@ function Data() {
           <ToastContainer />
 
         </div>
+
+
+      </div>
+
+      <div className="mt-4">
+        <button className="btn btn-success" onClick={handleSaveResults}>
+          Publish Results
+        </button>
       </div>
 
       {clusteringResults &&
