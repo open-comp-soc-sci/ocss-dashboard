@@ -20,7 +20,7 @@ import { ToastContainer } from 'react-toastify';
 function Data() {
   const [subreddit, setSubreddit] = useState('TrigeminalNeuralgia');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
-  const [startDate, setStartDate] = useState(new Date(2024, 11, 25)); // December 25, 2024
+  const [startDate, setStartDate] = useState(new Date(2024, 11, 2)); // December 2, 2024
   const [endDate, setEndDate] = useState(new Date(2024, 11, 31));     // December 31, 2024
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
@@ -35,6 +35,8 @@ function Data() {
   // Add these new state variables at the top along with your others.
   const [includeSubmissions, setIncludeSubmissions] = useState(true);
   const [includeComments, setIncludeComments] = useState(true);
+  const [debouncedSubreddit, setDebouncedSubreddit] = useState(subreddit);
+
 
 
   // This ref controls whether the main results DataTable should fetch data
@@ -61,6 +63,13 @@ function Data() {
     };
     fetchSearchHistory();
   }, [email]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSubreddit(subreddit);
+    }, 1000);
+    return () => clearTimeout(handler);
+  }, [subreddit]);
 
   const AddSearch = async () => {
     try {
@@ -176,7 +185,7 @@ function Data() {
       adjustedEndDate.setHours(23, 59, 59, 999);
 
       // Example for fetchArrowData:
-      let url = `/api/get_arrow?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(option)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(adjustedEndDate.toISOString())}`;
+      let url = `/api/get_arrow?subreddit=${encodeURIComponent(debouncedSubreddit)}&option=${encodeURIComponent(option)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(adjustedEndDate.toISOString())}`;
 
       if (searchValue) {
         url += `&search_value=${encodeURIComponent(searchValue)}`;
@@ -581,7 +590,7 @@ function Data() {
         $("#click-table").DataTable().destroy();
       }
     };
-  }, [subreddit, option, sentimentKeywords, startDate, endDate]);
+  }, [debouncedSubreddit, option, sentimentKeywords, startDate, endDate]);
 
   useEffect(() => {
     if (clusteringResults && clusteringResults.groups) {
@@ -822,7 +831,7 @@ function Data() {
               <button type="submit" className="btn btn-primary mt-2">Submit</button>
             </div>
           </form>
-          {error && <p className="text-danger mt-3">Error: {error}</p>}
+          {/* {error && <p className="text-danger mt-3">Error: {error}</p>} */}
         </div>
 
         {/* Sentiment Analysis Section */}
@@ -843,10 +852,15 @@ function Data() {
           <button className="btn btn-secondary">Save as PNG</button>
 
           <div className="mt-4">
-            <button className="btn btn-success" onClick={runSentimentAnalysis}>
+            <button
+              className="btn btn-success"
+              onClick={runSentimentAnalysis}
+              disabled={error && error.includes("does not exist")}
+            >
               {loadingSentiment ? 'Analyzing...' : 'Run Topic Clustering'}
             </button>
           </div>
+
           <ToastContainer />
 
         </div>
@@ -884,7 +898,9 @@ function Data() {
             />
           )}
         </div>
-        <h5>{dataMessage && <div style={{ color: 'red' }}>Data contains 3000 rows or less and may be insufficient.</div>}</h5>
+        <h5>{dataMessage && <div style={{ color: 'orange' }}>Data contains 3000 rows or less and may be insufficient for insightful topic clustering.</div>}</h5>
+        <h5>{error && <div style={{ color: 'red', marginTop: '1rem' }}>Error: {error}</div>}</h5>
+
         <div>
           <table id="click-table" className="display">
             <thead>
