@@ -25,6 +25,7 @@ function Data() {
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
+  const [searchError, setSearchError] = useState(null);
   const [option, setOption] = useState("reddit_submissions");
   const [clusteringResults, setClusteringResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
@@ -44,7 +45,14 @@ function Data() {
     const fetchSearchHistory = async () => {
       try {
         const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-        if (!response.ok) throw new Error('Search History Fetch Failed');
+
+        if (!response.ok) {
+          setError('Search history failed to fetch from Flask.');
+        }
+        else {
+          setError(null);
+        }
+
         const data = await response.json();
         setSearchData(data.search_history || []);
       } catch (error) {
@@ -68,7 +76,14 @@ function Data() {
           email: email,
         }),
       });
-      if (!response.ok) throw new Error('Frontend Post to Backend Failed');
+
+      if (!response.ok) {
+        setError('Failed to submit and add search.');
+      }
+      else {
+        setError(null);
+      }
+
       const data = await response.json();
       console.log('Search Query:', data);
       // Refresh search history after adding a search.
@@ -83,6 +98,7 @@ function Data() {
   const [isDeleting, setIsDeleting] = useState(false);
   const historyInitializedRef = useRef(false);
 
+  //ADD SEARCH HISTORY ERROR COMPONENT
   const RemoveSearch = async (searchId) => {
     try {
       setSearchData((prevData) => prevData.filter((item) => item.id !== searchId));
@@ -93,18 +109,24 @@ function Data() {
       });
 
       if (!response.ok) {
-        if (response.status === 404) {
-          console.warn(`Search with ID ${searchId} not found or already deleted.`);
-        }
-        throw new Error(`Failed to remove search ${searchId}`);
+        setSearchError('Failed to remove search ${searchId}.');
+      }
+      else {
+        setSearchError(null);
       }
 
-      console.log(`Search ID ${searchId} successfully removed from backend.`);
+      //console.log(`Search ID ${searchId} successfully removed from backend.`);
     } catch (error) {
-      setError(error.message);
+      setSearchError(error.message);
     } finally {
       const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-      if (!response.ok) throw new Error('Failed to fetch updated search history');
+
+      if (!response.ok) {
+        setSearchError('Failed to fetch updated search history.');
+      }
+      else {
+        setSearchError(null);
+      }
 
       const data = await response.json();
       setSearchData(data.search_history || []);
@@ -122,13 +144,24 @@ function Data() {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error("Failed to clear all searches");
+      if (!response.ok) {
+        setSearchError("Failed to clear all searches.");
+      }
+      else {
+        setSearchError(null);
+      }
 
       setSearchData([]);
     } catch (error) {
     } finally {
       const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-      if (!response.ok) throw new Error('Failed to fetch updated search history');
+
+      if (!response.ok) {
+        setSearchError("Failed to fetch updated search history.");
+      }
+      else {
+        setSearchError(null);
+      }
 
       const data = await response.json();
       setSearchData(data.search_history || []);
@@ -137,32 +170,35 @@ function Data() {
     }
   };
 
-  const fetchArrowData = async (start, length, draw, searchValue) => {
+  const fetchArrowData = async (start, length, draw, searchValue, setError) => {
     try {
       const adjustedEndDate = new Date(endDate);
       adjustedEndDate.setHours(23, 59, 59, 999);
-      
+
       // Example for fetchArrowData:
       let url = `/api/get_arrow?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(option)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(adjustedEndDate.toISOString())}`;
 
       if (searchValue) {
         url += `&search_value=${encodeURIComponent(searchValue)}`;
       }
-      
+
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(`Failed to fetch Arrow data: ${response.statusText}`);
+        const errorJson = await response.json();
+        setError(errorJson.error || `Error ${response.status}`);
+      } else {
+        setError(null);
       }
 
       // Get the binary data
       const arrayBuffer = await response.arrayBuffer();
-      
+
       // Use Arrow.tableFromIPC (or your preferred method) to parse the data.
       const table = await Arrow.tableFromIPC(new Uint8Array(arrayBuffer));
-      
+
       // Debug the schema to verify column names.
       console.log("Arrow table schema:", table.schema.fields.map(f => f.name));
-      
+
       // Instead of converting all rows, only convert the ones for the requested page.
       const paginatedData = [];
       const totalRows = table.numRows;
@@ -181,7 +217,7 @@ function Data() {
         }
         paginatedData.push(row);
       }
-      
+
       return {
         draw: draw,
         recordsTotal: totalRows,
@@ -192,8 +228,8 @@ function Data() {
       console.error("Error processing Arrow data:", error);
       throw error;
     }
-  };  
-  
+  };
+
 
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
@@ -384,8 +420,8 @@ function Data() {
         paging: true,
         pagingType: "full_numbers",
         dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'fB>>" +
-        "<'row'<'col-sm-12'tr>>" +
-        "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+          "<'row'<'col-sm-12'tr>>" +
+          "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
         searching: true,
         ajax: function (data, callback, settings) {
           if (!tableInitializedRef.current) {
@@ -399,7 +435,7 @@ function Data() {
           }
           const { start, length, draw, search } = data;
           // Use the Arrow endpoint instead of the old JSON endpoint.
-            fetchArrowData(start, length, draw, search.value)
+          fetchArrowData(start, length, draw, search.value, setError)
             .then(apiData => {
               callback(apiData);
               if (apiData.recordsFiltered <= 3000) {
@@ -525,7 +561,7 @@ function Data() {
             last: ">>"
           }
         }
-        });
+      });
 
       $("#goToPageButton").on("click", function () {
         const page = parseInt($("#pageInput").val(), 10) - 1;
@@ -570,9 +606,9 @@ function Data() {
       });
     }
   }, [clusteringResults]);
-  
-  
-  
+
+
+
 
   // When Submit is clicked, mark table as initialized and reload the DataTable.
   const handleSubmit = async (e) => {
@@ -584,8 +620,8 @@ function Data() {
     if (includeComments) options.push("reddit_comments");
     const combinedOption = options.join(",");
     setOption(combinedOption);
-    
-    
+
+
     setError(null);
     await AddSearch();  // (Make sure AddSearch also passes along the chosen option if needed.)
     tableInitializedRef.current = true;
@@ -596,26 +632,26 @@ function Data() {
       getSubredditIcon(subreddit);
     }
   };
-  
+
 
   const runSentimentAnalysis = async () => {
-  // Combine the current checkbox values on the fly.
-  let combinedOption = "";
-  if (includeSubmissions && includeComments) {
-    combinedOption = "reddit_submissions,reddit_comments";
-  } else if (includeSubmissions) {
-    combinedOption = "reddit_submissions";
-  } else if (includeComments) {
-    combinedOption = "reddit_comments";
-  } else {
-    // You could default to one or show an error if neither is selected.
-    combinedOption = "";
-  }
+    // Combine the current checkbox values on the fly.
+    let combinedOption = "";
+    if (includeSubmissions && includeComments) {
+      combinedOption = "reddit_submissions,reddit_comments";
+    } else if (includeSubmissions) {
+      combinedOption = "reddit_submissions";
+    } else if (includeComments) {
+      combinedOption = "reddit_comments";
+    } else {
+      // You could default to one or show an error if neither is selected.
+      combinedOption = "";
+    }
 
-  // Clear previous results.
-  setClusteringResults(null);
-  setLoadingSentiment(true);
-  setError(null);
+    // Clear previous results.
+    setClusteringResults(null);
+    setLoadingSentiment(true);
+    setError(null);
 
     try {
       const response = await fetch("/api/run_sentiment", {
@@ -638,7 +674,7 @@ function Data() {
     } finally {
       setLoadingSentiment(false);
     }
-  };  
+  };
 
   useEffect(() => {
     if (clusteringResults) {
@@ -651,14 +687,14 @@ function Data() {
       const response = await fetch(`https://www.reddit.com/r/${subReddit}/about.json`);
       const data = await response.json();
       let subredditIcon = data.data.community_icon;
-      
+
       // Remove query parameters from the URL by cutting off at the question mark
       if (subredditIcon && subredditIcon.includes('?')) {
         subredditIcon = subredditIcon.split('?')[0];
       }
-      
+
       console.log('Cleaned Subreddit Icon:', subredditIcon);
-      
+
       if (!subredditIcon) {
         setSubredditIcon('../public/reddit-1.svg');
       } else {
@@ -753,33 +789,33 @@ function Data() {
             </div>
 
             <div className="mt-4">
-            <h2>Search Options</h2>
-            <div className="form-group">
-              <label>Choose which data to view:</label>
-              <div>
-                <label className="form-check-label">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    checked={includeSubmissions}
-                    onChange={() => setIncludeSubmissions(!includeSubmissions)}
-                  />
-                  Submissions
-                </label>
-              </div>
-              <div>
-                <label className="form-check-label">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    checked={includeComments}
-                    onChange={() => setIncludeComments(!includeComments)}
-                  />
-                  Comments
-                </label>
+              <h2>Search Options</h2>
+              <div className="form-group">
+                <label>Choose which data to view:</label>
+                <div>
+                  <label className="form-check-label">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={includeSubmissions}
+                      onChange={() => setIncludeSubmissions(!includeSubmissions)}
+                    />
+                    Submissions
+                  </label>
+                </div>
+                <div>
+                  <label className="form-check-label">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={includeComments}
+                      onChange={() => setIncludeComments(!includeComments)}
+                    />
+                    Comments
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
 
 
             <div className="mt-4">
@@ -790,9 +826,9 @@ function Data() {
         </div>
 
         {/* Sentiment Analysis Section */}
-        
+
         <div className="col-md-8">
-        <h2>Sentiment Analysis</h2>
+          <h2>Sentiment Analysis</h2>
           <p>Posts within the selected date range.</p>
           <div
             style={{
@@ -812,7 +848,7 @@ function Data() {
             </button>
           </div>
           <ToastContainer />
-    
+
         </div>
       </div>
 
@@ -841,7 +877,7 @@ function Data() {
                 maxWidth: '100px',
                 maxHeight: '100px',
                 border: '5px solid white',
-                borderRadius: '50%',  
+                borderRadius: '50%',
                 transform: 'translateY(-30px)',
                 marginLeft: '10px'
               }}
@@ -870,6 +906,7 @@ function Data() {
       {/* Search History DataTable */}
       <div className="mt-5">
         <h2>Search History</h2>
+        {searchError && <p className="text-danger mt-3">Error: {searchError}</p>}
         <div id="clear-all-container" style={{ position: 'relative' }}>
           <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', right: '150px' }}>Clear All Searches</button>
         </div>
