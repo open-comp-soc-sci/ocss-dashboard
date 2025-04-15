@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import SignIn from './auth';
 import Data from './data';
 import Protect from './protect';
+import Results from "./results";
 
 function App() {
   const [userEmail, setEmail] = useState('');
@@ -53,7 +54,7 @@ function App() {
     setEmail('');
   };
 
-  
+
   return (
     <Router>
       <div className="bg-dark text-light min-vh-100">
@@ -95,8 +96,16 @@ function App() {
                 {userEmail && (
                   <li className="nav-item">
                     <Link className="nav-link" to="/data">
-                      <i className="fas fa-chart-line me-1"></i>
+                      <i className="fas fa-database me-1"></i>
                       Data
+                    </Link>
+                  </li>
+                )}
+                {userEmail && (
+                  <li className="nav-item">
+                    <Link className="nav-link" to="/results">
+                      <i className="fas fa-poll me-1"></i>
+                      Results
                     </Link>
                   </li>
                 )}
@@ -134,16 +143,16 @@ function App() {
                   </div>
                   <div className="mt-4">
                     <p>
-                      There exists no comprehensive solution to appraise the sentiment of online social media platforms. 
-                      This is a pressing issue, as the use of these platforms is ubiquitous, especially for members of marginalized communities. 
-                      Despite endless hours spent using these platforms by everyday users, research of the messages’ contents is not immediately apparent, straightforward, or accessible. 
-                      Research into the opinions and experiences shared within these communities can offer altruistic opportunities, 
+                      There exists no comprehensive solution to appraise the sentiment of online social media platforms.
+                      This is a pressing issue, as the use of these platforms is ubiquitous, especially for members of marginalized communities.
+                      Despite endless hours spent using these platforms by everyday users, research of the messages’ contents is not immediately apparent, straightforward, or accessible.
+                      Research into the opinions and experiences shared within these communities can offer altruistic opportunities,
                       especially the dissemination of medical outcomes and their success rates.
                     </p>
                     <p>
-                      To enable this accessibility, as a juncture of computer science and social science, 
-                      this website is built with React and Flask to bridge the gap between otherwise unwieldy magnitudes of text data and straightforward sentiment analysis. 
-                      This project intends to help social scientists analyze these social platforms. 
+                      To enable this accessibility, as a juncture of computer science and social science,
+                      this website is built with React and Flask to bridge the gap between otherwise unwieldy magnitudes of text data and straightforward sentiment analysis.
+                      This project intends to help social scientists analyze these social platforms.
                       The website will likely go on to contain more advanced features within its lifetime, including measuring linguistic trends and interactions between groups on the Internet.
                     </p>
                     <div
@@ -174,10 +183,26 @@ function App() {
               }
             />
             <Route
+              path="/about"
+              element={
+                <div>
+                  <h1>What do we want on the about page???</h1>
+                </div>
+              }
+            />
+            <Route
               path="/data"
               element={
                 <Protect userEmail={userEmail}>
                   <Data />
+                </Protect>
+              }
+            />
+            <Route
+              path="/results"
+              element={
+                <Protect userEmail={userEmail}>
+                  <Results />
                 </Protect>
               }
             />
