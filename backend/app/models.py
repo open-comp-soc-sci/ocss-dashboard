@@ -7,7 +7,7 @@ Base = declarative_base()
 
 from app.extensions import db
 
-#Search History Model
+# Search History Model
 class SearchHistory(db.Model):
     __tablename__ = 'searchHistory'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -16,7 +16,24 @@ class SearchHistory(db.Model):
     sentimentKeywords = db.Column(db.String(), nullable=False)
     startDate = db.Column(db.Date, nullable=False)
     endDate = db.Column(db.Date, nullable=False)
+    option = db.Column(db.String(), nullable=False)
     created_utc = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
+
+# Results Model
+class ResultData(db.Model):
+    __tablename__ = 'resultData'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    email = db.Column(db.String(), nullable=False)
+    # Search Parameters
+    subreddit = db.Column(db.String(), nullable=False)
+    startDate = db.Column(db.Date, nullable=False)
+    endDate = db.Column(db.Date, nullable=False)
+    created_utc = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
+    # Topic Clustering (is this correct?)
+    #topic1 = db.Column(db.String(), nullable=False)
+    #topic2 = db.Column(db.String(), nullable=False)
+    #topic3 = db.Column(db.String(), nullable=False)
+
     
 # unimplemented RedditData model class. 
 class RedditData(Base):

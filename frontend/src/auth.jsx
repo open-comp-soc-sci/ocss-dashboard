@@ -5,6 +5,10 @@ import { signInWithPopup } from "firebase/auth"
 function SignIn() {
     const [value, setValue] = useState('')
     const handleClick = () => {
+        provider.setCustomParameters({
+            prompt: "select_account"
+        });
+
         signInWithPopup(auth, provider)
             .then((data) => {
                 const userEmail = data.user.email
