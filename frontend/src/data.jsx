@@ -642,6 +642,12 @@ function Data() {
     }
   };
 
+  useEffect(() => {
+    // Automatically run the search on page load.
+    handleSubmit({ preventDefault: () => {} });
+  }, []);
+  
+
 
   const runSentimentAnalysis = async () => {
     // Combine the current checkbox values on the fly.
@@ -780,6 +786,9 @@ function Data() {
                   endDate={endDate}
                   className="form-control"
                   placeholderText="Start Date"
+                  showMonthDropdown
+                  showYearDropdown
+                  dropdownMode="select"
                 />
               </div>
               <div className="mt-3">
@@ -793,6 +802,9 @@ function Data() {
                   minDate={startDate}
                   className="form-control"
                   placeholderText="End Date"
+                  showMonthDropdown
+                  showYearDropdown
+                  dropdownMode="select"
                 />
               </div>
             </div>
