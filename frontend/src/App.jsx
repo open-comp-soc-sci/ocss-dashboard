@@ -5,9 +5,25 @@ import Data from './data';
 import Protect from './protect';
 
 function App() {
-
   const [userEmail, setEmail] = useState('');
+  const [visible, setVisible] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+
+  // The SVG images you wish to rotate through
+  const svgImages = [
+    "/whatdopeopletalkabout.svg",
+    "/howdopeoplefeel.svg",
+    "/whattermsdopeopleuse.svg"
+  ];
+
+  // Controls which layer is active (1 or 2). Each layer is a separate div with its own image.
+  const [activeLayer, setActiveLayer] = useState(1);
+  // Holds the image source for layer 1 and 2
+  const [layer1Image, setLayer1Image] = useState(svgImages[0]);
+  const [layer2Image, setLayer2Image] = useState("");
+
+  // Retrieve user email from localStorage on mount (if any)
   useEffect(() => {
     const savedEmail = localStorage.getItem('email');
     if (savedEmail) {
@@ -15,11 +31,29 @@ function App() {
     }
   }, []);
 
+  // Initial fade-in effect for the image container after 1.5 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setVisible(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Rotate through images every 8 seconds after the container has become visible.
+  useEffect(() => {
+    if (!visible) return;
+    const interval = setInterval(() => {
+      setCurrentImageIndex(prevIndex => (prevIndex + 1) % svgImages.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [visible, svgImages.length]);
+
   const logout = () => {
     localStorage.removeItem('email');
     setEmail('');
   };
 
+  
   return (
     <Router>
       <div className="bg-dark text-light min-vh-100">
@@ -47,7 +81,6 @@ function App() {
             </button>
             <div className="collapse navbar-collapse" id="navbarSupportedContent">
               <ul className="navbar-nav ms-auto mb-2 mb-lg-0">
-                {/* Welcome email text */}
                 <div className="text-light py-2" style={{ position: 'absolute', top: 70, right: 0, width: '100%' }}>
                   <div className="container text-end">
                     {userEmail && <h4 className="mb-0" style={{ fontSize: '1.25rem' }}>Welcome, {userEmail}!</h4>}
@@ -59,7 +92,6 @@ function App() {
                     Home
                   </Link>
                 </li>
-                {/* Navigation to data route */}
                 {userEmail && (
                   <li className="nav-item">
                     <Link className="nav-link" to="/data">
@@ -69,20 +101,20 @@ function App() {
                   </li>
                 )}
                 <li className="nav-item">
-                  {/* Need an about page developed */}
                   <Link className="nav-link" to="/about">
                     <i className="fas fa-info-circle me-1"></i>
                     About
                   </Link>
                 </li>
-                {/* FireBase SignIn */}
                 <li className="nav-item">
                   <Link className="nav-link d-flex align-items-center" to="/">
                     <i className="fas fa-user me-1"></i>
                     {!userEmail ? (
                       <SignIn setEmail={setEmail} />
                     ) : (
-                      <button className="nav-link btn btn-link text-grey p-0" onClick={logout}>Logout</button>
+                      <button className="nav-link btn btn-link text-grey p-0" onClick={logout}>
+                        Logout
+                      </button>
                     )}
                   </Link>
                 </li>
@@ -90,32 +122,65 @@ function App() {
             </div>
           </div>
         </nav>
-        <div className="container mt-5">
-          {/* Centered Heading */}
-          <Routes>
-            <Route path="/" element={
-              <div>
-                <div className="text-center">
-                  <h1>Welcome to OCSS</h1>
-                </div>
-                {/* Left-aligned description text */}
-                <div className="mt-4">
-                  <p>
-                    There exists no comprehensive solution to appraise the sentiment of online social media platforms. This is a pressing issue, as the use of these platforms is ubiquitous, especially for members of marginalized communities. Despite endless hours spent using these platforms by everyday users, research of the messages’ contents is not immediately apparent, straightforward, or accessible. Research into the opinions and experiences shared within these communities can offer altruistic opportunities, especially the dissemination of medical outcomes and their success rates.
-                  </p>
-                  <p>
-                    To enable this accessibility, as a juncture of computer science and social science, this website is built with React and Flask to bridge the gap between otherwise unwieldy magnitudes of text data and straightforward sentiment analysis. This project intends to help social scientists analyze these social platforms. The website will likely go on to contain more advanced features within its lifetime, including measuring linguistic trends and interactions between groups on the Internet.
-                  </p>
-                </div>
-              </div>
-            } />
 
-            {/* Data Page Route Protected */}
+        <div className="container mt-5">
+          <Routes>
             <Route
-              path="/data" element={
+              path="/"
+              element={
+                <div>
+                  <div className="text-center">
+                    <h1>Welcome to Open Computational Social Science</h1>
+                  </div>
+                  <div className="mt-4">
+                    <p>
+                      There exists no comprehensive solution to appraise the sentiment of online social media platforms. 
+                      This is a pressing issue, as the use of these platforms is ubiquitous, especially for members of marginalized communities. 
+                      Despite endless hours spent using these platforms by everyday users, research of the messages’ contents is not immediately apparent, straightforward, or accessible. 
+                      Research into the opinions and experiences shared within these communities can offer altruistic opportunities, 
+                      especially the dissemination of medical outcomes and their success rates.
+                    </p>
+                    <p>
+                      To enable this accessibility, as a juncture of computer science and social science, 
+                      this website is built with React and Flask to bridge the gap between otherwise unwieldy magnitudes of text data and straightforward sentiment analysis. 
+                      This project intends to help social scientists analyze these social platforms. 
+                      The website will likely go on to contain more advanced features within its lifetime, including measuring linguistic trends and interactions between groups on the Internet.
+                    </p>
+                    <div
+                      style={{
+                        position: 'relative',
+                        textAlign: 'center',
+                        // marginTop: '20px',
+                        height: '500px',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                      }}
+                    >
+                      {/* Image container with initial fade in */}
+                      <img
+                        src={svgImages[currentImageIndex]}
+                        alt="Data visualization concept"
+                        className="img-fluid"
+                        style={{
+                          maxHeight: '100%',
+                          opacity: visible ? 1 : 0,
+                          transition: 'opacity 1s ease-in'
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              }
+            />
+            <Route
+              path="/data"
+              element={
                 <Protect userEmail={userEmail}>
                   <Data />
-                </Protect>} />
+                </Protect>
+              }
+            />
           </Routes>
         </div>
       </div>
