@@ -11,7 +11,7 @@ export default defineConfig({
     allowedHosts: ['sunshine.cise.ufl.edu'],
     proxy: {
       '/api': {
-        target: 'http://app:5000', // The backend API endpoint
+        target: 'https://app:5000', // The backend API endpoint
         changeOrigin: true,
         secure: false,
         // Optional: If you need to rewrite paths, do it here
