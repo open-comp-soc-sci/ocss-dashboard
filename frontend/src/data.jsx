@@ -458,7 +458,7 @@ function Data() {
 
       //issue where go to needs to be clicked twice
       setTimeout(() => {
-        fetchData(0, 10, 1, searchValue).then(() => {
+        fetchArrowData(0, 10, 1, searchValue, setError).then(() => {
           tableInitializedRef.current = true;
           if ($.fn.DataTable.isDataTable("#click-table")) {
             $("#click-table").DataTable().ajax.reload();
@@ -488,26 +488,6 @@ function Data() {
 
   const removeTerm = (term) => {
     setSearchTerms(searchTerms.filter(t => t !== term));
-  };
-
-  //WILL REMOVE, REDUNDANT
-  const fetchData = async (start, length, draw, searchValue) => {
-    try {
-      const response = await fetch(
-        `/api/get_arrow?length=${length}&start=${start}&draw=${draw}` +
-        `&subreddit=${encodeURIComponent(subreddit)}` +
-        `&option=${encodeURIComponent(option)}` +
-        `&search_value=${encodeURIComponent(searchValue)}` +
-        `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
-        `&startDate=${encodeURIComponent(startDate.toISOString())}` +
-        `&endDate=${encodeURIComponent(endDate.toISOString())}` +
-        `&option=${encodeURIComponent(option)}`
-      );
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error("Error fetching data for main datatables:", error);
-    }
   };
 
   // Initialize main results DataTable on mount or when dependencies change.
@@ -746,7 +726,7 @@ function Data() {
     // Automatically run the search on page load. Adjust to only fetch data and not add to search history.
     const searchValue = `${subreddit} ${sentimentKeywords} ${startDate.toISOString()} ${endDate.toISOString()}`;
 
-    fetchData(0, 10, 1, searchValue).then(() => {
+    fetchArrowData(0, 10, 1, searchValue, setError).then(() => {
       tableInitializedRef.current = true;
       if ($.fn.DataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().ajax.reload();
