@@ -135,25 +135,31 @@ const Results = () => {
 
                                                         {!error && topicsCard.length > 0 && (
                                                             <div className="row">
-                                                                {topicsCard.map((topic) => (
-                                                                    <div key={topic.id} className="col-md-4 mb-3">
-                                                                        <div className="card h-100">
-                                                                            <div className="card-body">
-                                                                                <h6 className="card-title">
-                                                                                    Group {topic.group_number}: {topic.topic_label}
-                                                                                </h6>
-                                                                                <p className="card-text">
-                                                                                    Posts: {topic.post_count}
-                                                                                </p>
-                                                                                <ul className="small">
-                                                                                    {topic.topics && topic.topics.map((word, index) => (
-                                                                                        <li key={index}>{word}</li>
-                                                                                    ))}
-                                                                                </ul>
+                                                                {[...topicsCard]
+                                                                    .sort((a, b) => {
+                                                                        if (a.group_number !== b.group_number) {
+                                                                            return a.group_number - b.group_number;
+                                                                        }
+                                                                        return a.id - b.id;
+                                                                    }).map((topic) => (
+                                                                        <div key={topic.id} className="col-md-4 mb-3">
+                                                                            <div className="card h-100">
+                                                                                <div className="card-body">
+                                                                                    <h6 className="card-title">
+                                                                                        Group {topic.group_number}: {topic.topic_label}
+                                                                                    </h6>
+                                                                                    <p className="card-text">
+                                                                                        Posts: {topic.post_count}
+                                                                                    </p>
+                                                                                    <ul className="small">
+                                                                                        {topic.topics && topic.topics.map((word, index) => (
+                                                                                            <li key={index}>{word}</li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
-                                                                    </div>
-                                                                ))}
+                                                                    ))}
                                                             </div>
                                                         )}
                                                     </div>
