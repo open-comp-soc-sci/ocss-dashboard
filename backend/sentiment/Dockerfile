@@ -10,4 +10,4 @@ COPY printClusters.py /app/
 COPY readReddit.py /app/
 COPY roberta.py /app/
 
-CMD ["python", "sentiment_analysis_consumer.py"]
+CMD ["python", "-u", "sentiment_analysis_consumer.py"]

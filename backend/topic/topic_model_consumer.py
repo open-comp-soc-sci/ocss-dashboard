@@ -62,7 +62,7 @@ def callback(ch, method, properties, body):
         # print("Topic modeling complete:", result_message)
 
         # Publish the reply to the callback queue specified in properties.reply_to
-        response_body = json.dumps({"result": result_message})
+        response_body = json.dumps(result_message)
         ch.basic_publish(
             exchange='',
             routing_key=properties.reply_to,  # send reply to the callback queue
