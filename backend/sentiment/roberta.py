@@ -1,15 +1,18 @@
 import os
+import numpy as np
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 
 HUGGINGFACE_API_TOKEN = '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'
 os.environ['HUGGINGFACEHUB_API_TOKEN'] = HUGGINGFACE_API_TOKEN
 
+print("AAAAAA", flush=True)
 # Loading a Pre-Trained Model from HuggingFace Hub
 # Fine-tuned for sentiment analysis on Twitter data (subject to change)
 model_name = "cardiffnlp/twitter-roberta-base-sentiment"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
 classifier = pipeline('sentiment-analysis', model=model, tokenizer=tokenizer)
+print("BBBBBBBB", flush=True)
 
 
 def run_roberta_analysis(terms, sectioned_bodies):
@@ -93,3 +96,31 @@ def run_roberta_analysis(terms, sectioned_bodies):
     print(f"Least negatively occurring term: {least_negative} ({term_stats[least_negative]['negative']['count'] / term_stats[least_negative]['occurrences']:.2f})")
 
     return term_stats
+
+def run_topic_roberta_analysis(df, allTopics):
+    def run_classification(text):
+        result = classifier(text)[0]  # Extract first result
+        return {"label": result['label'], "score": result['score']}
+    topics_array = np.array(allTopics)
+    topic_stats = []
+    for topic in range(0, topics_array.max()+1):
+        topic_inds = np.where(topics_array == topic)[0]
+        topic_occurances = topic_inds.size
+        topic_avg_score = 0
+        for body in df["body"][topic_inds]:
+            result = run_classification(body[:512])
+            score = result['score']
+            
+            if result['label'] == 'LABEL_2':  # Positive
+                topic_avg_score += score
+            elif result['label'] == 'LABEL_0':  # Negative
+                topic_avg_score -= score
+            #else:  # Neutral (LABEL_1)
+        topic_avg_score = topic_avg_score / topic_occurances
+        topic_stats.append({
+            "topic": topic,
+            "score": topic_avg_score
+        })
+        
+    return topic_stats
+    
