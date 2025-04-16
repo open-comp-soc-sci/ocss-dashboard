@@ -104,7 +104,7 @@ class TopicModeling():
         self.label_topics()
         self.find_groups()
         self.label_groups()
-        self.send_groups()
+        # self.send_groups()
         # self.plot_topics()
         self.create_topic_table()
 
@@ -123,7 +123,7 @@ class TopicModeling():
             # Build the API URL and append date parameters if provided.
             print('fetching from clickhouse')
 
-            api_url = f"httpss://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
+            api_url = f"https://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
             if start_date:
                 api_url += f"&startDate={start_date}"
             if end_date:
@@ -341,7 +341,7 @@ class TopicModeling():
 
 
     def label_groups(self):
-        self.group_labeler = GroupLabeling(self.df, self.topics, self.topic_labeler.topic_labels, self.groups, self.topic_model, self.topic_labeler)
+        self.group_labeler = GroupLabeling(self.df, self.topics, self.topic_labeler.topic_labels, self.groups, self.topic_model, self.topic_labeler, self.config)
 
 
 
@@ -735,8 +735,9 @@ Now produce one JSON array of three labels, e.g.: ["Label 1","Label 2","Label 3"
         self.prompts = prompts
 
 class GroupLabeling():
-    def __init__(self, df, topics, topic_labels, groups, topic_model, topic_labeler):
+    def __init__(self, df, topics, topic_labels, groups, topic_model, topic_labeler, config):
         self.df = df
+        self.config = config
         self.topics = topics
         self.groups = groups
         self.topic_labels = topic_labels
@@ -800,6 +801,15 @@ class GroupLabeling():
         Returns a JSON-serializable dictionary of the grouping results.
         For each topic, uses the representative document stored in self.topic_labeler.rep_docs.
         """
+        print("Serializing the results")
+        # Create a meta-data dictionary with additional details.
+        meta_data = {
+            "subreddit": self.config.get("subreddit"),
+            "option": self.config.get("option"),  # Indicates posts or comments.
+            "startDate": self.config.get("startDate", ""),
+            "endDate": self.config.get("endDate", "")
+        }
+        
         grouped_results = []  # List to hold one dictionary per group
 
         topics_array = np.array(self.topics)
@@ -841,8 +851,13 @@ class GroupLabeling():
                 group_listing["topics"].append(topic_item)
             group_listing["postCount"] = group_post_count
             grouped_results.append(group_listing)
-
-        return {"groups": grouped_results}
+                # Combine meta-data and grouping results into a single dictionary.
+        message_data = {
+            "meta": meta_data,
+            "groups": grouped_results,
+            "allTopics": self.topics
+        }
+        return message_data
 
 
 
