@@ -266,26 +266,26 @@ function Data() {
     }
   };
 
-// Amplification factor for sentiment scores.
-// Adjust this value based on the typical magnitude of your scores.
-const amplifyFactor = 5;
+  // Amplification factor for sentiment scores.
+  // Adjust this value based on the typical magnitude of your scores.
+  const amplifyFactor = 5;
 
-const getBarColor = (score) => {
-  // Amplify the score.
-  const amplified = score * amplifyFactor;
-  // Clamp the amplified score between -1 and 1.
-  const clamped = Math.max(-1, Math.min(1, amplified));
-  // Map the clamped score to a hue value between 0 (red) and 120 (green).
-  // If clamped == -1, hue = 0 (red)
-  // If clamped == 0, hue = 60 (yellow)
-  // If clamped == 1, hue = 120 (green)
-  const hue = ((clamped + 1) / 2) * 120;
-  // Adjust saturation and lightness as desired. Here we choose 70% saturation and 50% lightness.
-  return {
-    background: `hsla(${hue}, 70%, 50%, 0.5)`,
-    border: `hsl(${hue}, 70%, 50%)`
+  const getBarColor = (score) => {
+    // Amplify the score.
+    const amplified = score * amplifyFactor;
+    // Clamp the amplified score between -1 and 1.
+    const clamped = Math.max(-1, Math.min(1, amplified));
+    // Map the clamped score to a hue value between 0 (red) and 120 (green).
+    // If clamped == -1, hue = 0 (red)
+    // If clamped == 0, hue = 60 (yellow)
+    // If clamped == 1, hue = 120 (green)
+    const hue = ((clamped + 1) / 2) * 120;
+    // Adjust saturation and lightness as desired. Here we choose 70% saturation and 50% lightness.
+    return {
+      background: `hsla(${hue}, 70%, 50%, 0.5)`,
+      border: `hsl(${hue}, 70%, 50%)`
+    };
   };
-};
 
 
 
@@ -774,12 +774,12 @@ const getBarColor = (score) => {
     } else {
       combinedOption = "";
     }
-  
+
     // Clear previous results to show fresh results.
     setClusteringResults(null);
     setLoadingSentiment(true);  // You might consider renaming this to reflect topic clustering loading.
     setError(null);
-  
+
     try {
       const response = await fetch("/api/run_topic", {
         method: "POST",
@@ -801,12 +801,12 @@ const getBarColor = (score) => {
       setLoadingSentiment(false);
     }
   };
-  
+
 
   const runSentimentAnalysis = async () => {
     setLoadingSentiment(true);
     setError(null);
-    
+
     try {
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
@@ -827,8 +827,8 @@ const getBarColor = (score) => {
       setLoadingSentiment(false);
     }
   };
-  
-  
+
+
 
   useEffect(() => {
     if (clusteringResults) {
@@ -929,11 +929,11 @@ const getBarColor = (score) => {
     const sentimentArray = clusteringResults.sentiment;
     const dynamicLabels = sentimentArray.map(result => `Topic ${result.topic}`);
     const dynamicData = sentimentArray.map(result => result.score);
-      // Use the getBarColor function to compute colors based on the amplified score.
-  const dynamicBackgroundColors = sentimentArray.map(result => getBarColor(result.score).background);
-  const dynamicBorderColors = sentimentArray.map(result => getBarColor(result.score).border);
+    // Use the getBarColor function to compute colors based on the amplified score.
+    const dynamicBackgroundColors = sentimentArray.map(result => getBarColor(result.score).background);
+    const dynamicBorderColors = sentimentArray.map(result => getBarColor(result.score).border);
 
-  
+
     dynamicChartData = {
       labels: dynamicLabels,
       datasets: [{
@@ -944,7 +944,7 @@ const getBarColor = (score) => {
         borderWidth: 1
       }]
     };
-  
+
     dynamicChartOptions = {
       responsive: true,
       maintainAspectRatio: false,
@@ -963,7 +963,7 @@ const getBarColor = (score) => {
       }
     };
   }
-  
+
   return (
     <div className="container mt-5">
       {/* Page Header */}
@@ -1154,14 +1154,6 @@ const getBarColor = (score) => {
 
         </div>
 
-
-      </div>
-
-      {/* Test Button Will Remove*/}
-      <div className="mt-4">
-        <button className="btn btn-success" onClick={handleSaveResults}>
-          Publish Results Test Function
-        </button>
       </div>
 
       {/* {clusteringResults && (
@@ -1173,9 +1165,9 @@ const getBarColor = (score) => {
           <div className="col-md-12">
             <h2>Topic Clustering Results</h2>
             <TopicTablesContainer
-        groups={clusteringResults.groups} 
-        handleSaveResults={handleSaveResults}
-      />
+              groups={clusteringResults.groups}
+              handleSaveResults={handleSaveResults}
+            />
 
           </div>
         </div>
