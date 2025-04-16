@@ -46,10 +46,12 @@ def get_pooled_client():
 
 
 def release_client(client):
-    connection_pool.put(client)
+    if client:
+        connection_pool.put(client)
 
 @clickHouse_BP.route("/api/get_arrow", methods=["GET"])
 def get_arrow():
+    client = None
     try:
         # Retrieve query parameters.
         subreddit = request.args.get('subreddit', '')
@@ -58,6 +60,9 @@ def get_arrow():
         end_date = request.args.get('endDate', None)
         option = request.args.get('option', 'reddit_comments')  # Default to comments if not specified
         search_value = request.args.get('search_value', '', type=str)
+
+        if not option or option.strip() == '':
+            return jsonify({"error": "Data option was not selected."}), 400
 
         if ',' in option:
             # If both options are selected, use a UNION ALL query.
@@ -72,8 +77,6 @@ def get_arrow():
             base_query = "SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions"
         elif option == "reddit_comments":
             base_query = "SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
-
-
         
         conditions = []
         if subreddit:
@@ -97,6 +100,9 @@ def get_arrow():
         query += " LIMIT 9999999999999 OFFSET 0"
         
         client = get_pooled_client()
+        if client is None:
+            return jsonify({"error": "Failed to get ClickHouse client."}), 500
+
         
         # Use query_arrow to get an Arrow Table directly.
         start_time = time.time()
