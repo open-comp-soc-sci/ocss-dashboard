@@ -96,12 +96,13 @@ def saveResult():
                 email=data["email"],
                 result_id=new_result.id,
                 group_number=group['group'],
-                topic_label=group['llmLabel'],
+                group_label=group['llmLabel'],
                 topics=[
                     {
                         "topicNumber": topic['topicNumber'],
                         "ctfidfKeywords": topic['ctfidfKeywords'],
-                        "postCount": topic['postCount']
+                        "postCount": topic['postCount'],
+                        "topicLabel": topic['topicLabel']
                     }
                     for topic in group['topics']
                 ],
@@ -141,7 +142,7 @@ def getResult():
                 for topic in group.topics:  # Iterate through each topic in the 'topics' JSON
                     topic_info = {
                         "topicNumber": topic.get("topicNumber"),
-                        "topicLabel": topic.get("ctfidfKeywords"),
+                        "topicLabel": topic.get("topicLabel"),
                         "postCount": topic.get("postCount"),
                     }
                     topics_info.append(topic_info)
@@ -188,8 +189,9 @@ def getTopics(result_id):
                     "group_number": topic.group_number,
                     "topic_number": topic_item.get("topicNumber"),
                     "group_label": topic.group_label,
-                    "topic_label": topic_item.get("ctfidfKeywords"),
-                    "post_count": topic_item.get("postCount"),
+                    "topicLabel": topic_item.get("topicLabel"),
+                    "ctfidfKeywords": topic_item.get("ctfidfKeywords"),
+                    "postCount": topic_item.get("postCount"),
                     "example_posts": topic.example_posts
                 })
 
