@@ -12,7 +12,7 @@ const Results = () => {
             try {
                 const response = await fetch("/api/get_result");
                 const data = await response.json();
-                console.log(data)
+                //console.log(data)
                 setResults(data.results);
                 setError(null);
             } catch (err) {
