@@ -14,8 +14,11 @@ services:
     env_file:
       - .env
     environment:
+      FLASK_ENV: development
       FLASK_DEBUG: 1
+      PROPAGATE_EXCEPTIONS: True
       FLASK_SQLALCHEMY_DATABASE_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+      RUNNINGLOCAL: ${RUNNINGLOCAL}
     command: ["./wait-for-db.sh", "db", "sh", "-c", "python create_tables.py && flask run -h 0.0.0.0"]
 
   frontend:
