@@ -4,7 +4,9 @@ const Results = () => {
     const [results, setResults] = useState([]);
     const [error, setError] = useState(null);
     const [email] = useState(localStorage.getItem('email'));
-    console.log("Local email:", email);
+    const [topicsCard, setTopicsCard] = useState([]);
+    //console.log("Local email:", email);
+
     useEffect(() => {
         const fetchResults = async () => {
             try {
@@ -48,6 +50,21 @@ const Results = () => {
         }
     };
 
+    const handleShowTopicInfo = async (resultId) => {
+        try {
+            const response = await fetch(`/api/get_topics/${resultId}`);
+            const data = await response.json();
+            if (data.error) {
+                setError("Error fetching Topic Clustering data for this result.");
+            } else {
+                setTopicsCard(data.topics);
+                setError(null);
+            }
+        } catch (err) {
+            setError("Error fetching Topic Clustering data for this result.");
+        }
+    };
+
     return (
         <div className="container py-4">
             <div className="container py-4">
@@ -56,6 +73,9 @@ const Results = () => {
                 </h1>
                 {error && <p className="text-danger mt-3">Error: {error}</p>}
                 <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
+                    {results.length === 0 && !error && (
+                        <p className="text-muted">No results found.</p>
+                    )}
                     {groupedResults.map((group, rowIndex) => (
                         <div className="row my-4 d-flex align-items-stretch" key={rowIndex}>
                             {group.map((resultCard, columnIndex) => (
@@ -74,10 +94,69 @@ const Results = () => {
                                             {new Date(resultCard.created_utc).toLocaleString()}
                                         </p>
 
-                                        <h5 className="card-title mt-3">Top 3 Topics</h5>
+                                        <h5 className="card-title mt-3">Popular Topics</h5>
                                         <p className="card-text mb-0">Topic 1: {resultCard.topic1 || "N/A"}</p>
                                         <p className="card-text mb-0">Topic 2: {resultCard.topic2 || "N/A"}</p>
                                         <p className="card-text mb-0">Topic 3: {resultCard.topic3 || "N/A"}</p>
+
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary mt-2"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#showTopics"
+                                            onClick={() => handleShowTopicInfo(resultCard.id)}
+                                        >
+                                            Show Topic Info
+                                        </button>
+
+                                        <div
+                                            className="modal fade"
+                                            id="showTopics"
+                                            tabIndex="-1"
+                                            aria-labelledby="showTopics"
+                                            aria-hidden="true"
+                                        >
+                                            <div className="modal-dialog modal-lg">
+                                                <div className="modal-content">
+                                                    <div className="modal-header">
+                                                        <h5 className="modal-title" id="showTopics">Three Column Modal</h5>
+                                                        <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div className="modal-body">
+                                                        <h1>Testing, Will Place Topic Clustering Here</h1>
+                                                        {error && <p className="text-danger">{error}</p>}
+
+                                                        {!error && topics.length === 0 && (
+                                                            <p>No topic data available for this result.</p>
+                                                        )}
+
+                                                        {!error && topicsCard.length > 0 && (
+                                                            <div className="row">
+                                                                {topicsCard.map((topic) => (
+                                                                    <div key={topic.id} className="col-md-4 mb-3">
+                                                                        <div className="card h-100">
+                                                                            <div className="card-body">
+                                                                                <h6 className="card-title">
+                                                                                    Group {topic.group_number}: {topic.topic_label}
+                                                                                </h6>
+                                                                                <p className="card-text">
+                                                                                    Posts: {topic.post_count}
+                                                                                </p>
+                                                                                <ul className="small">
+                                                                                    {Object.values(topic.topicsCard).map((word, index) => (
+                                                                                        <li key={index}>{word}</li>
+                                                                                    ))}
+                                                                                </ul>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
 
                                         {email === resultCard.email && (
                                             <button
