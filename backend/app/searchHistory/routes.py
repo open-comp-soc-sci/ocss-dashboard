@@ -79,49 +79,67 @@ def clearAll(email):
 @searchHistory_BP.route("/api/save_result", methods=["POST"])
 def saveResult():
     data = request.get_json()
-
-    try:
-        new_result = ResultData(
+    
+    new_result = ResultData(
             email=data["email"],
             subreddit=data["subreddit"],
             startDate=datetime.strptime(data["startDate"], "%Y-%m-%d").date(),
             endDate=datetime.strptime(data["endDate"], "%Y-%m-%d").date()
         )
-        db.session.add(new_result)
-        db.session.commit()
+    db.session.add(new_result)
+    db.session.commit()
 
-        groups = data['groups']
+    groups_raw = data["groups"]
+    groups = []
+
+    for item in groups_raw:
+        if isinstance(item, dict):
+            groups.append(item)
+        elif isinstance(item, list):
+            for subitem in item:
+                if isinstance(subitem, dict):
+                    groups.append(subitem)
+    
+    try:
         for group in groups:
+            topics = group.get('topics', [])
+            print("PROCESSING GROUP:", topics)
+
+            topics_list = [
+                {
+                    "topicNumber": topic["topicNumber"],
+                    "ctfidfKeywords": topic["ctfidfKeywords"],
+                    "postCount": topic["postCount"],
+                    "topicLabel": topic["topicLabel"]
+                }
+                for topic in topics
+            ]
+
+            example_posts = [
+                {
+                    "topicNumber": topic["topicNumber"],
+                    "samplePost": topic["samplePosts"]
+                }
+                for topic in topics
+            ]
+
             topicCluster = TopicData(
                 email=data["email"],
                 result_id=new_result.id,
                 group_number=group['group'],
                 group_label=group['llmLabel'],
-                topics=[
-                    {
-                        "topicNumber": topic['topicNumber'],
-                        "ctfidfKeywords": topic['ctfidfKeywords'],
-                        "postCount": topic['postCount'],
-                        "topicLabel": topic['topicLabel']
-                    }
-                    for topic in group['topics']
-                ],
-                example_posts=[
-                    {
-                        "topicNumber": topic['topicNumber'],
-                        "samplePost": topic['samplePosts']
-                    }
-                for topic in group['topics']
-                ]
+                topics=topics_list,
+                example_posts=example_posts
             )
             db.session.add(topicCluster)
         db.session.commit()
-
 
         return jsonify({"message": "Saved successfully"}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+
     
 @searchHistory_BP.route("/api/get_result", methods=["GET"])
 def getResult():
