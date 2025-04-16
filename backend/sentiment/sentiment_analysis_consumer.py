@@ -2,8 +2,8 @@ import json
 import os
 import pika
 import copy
-from roberta import run_roberta_analysis
-from readReddit import preproccess_sentiment_data, load_dataframe
+from roberta import run_roberta_analysis, run_topic_roberta_analysis
+from readReddit import preproccess_termed_sentiment_data, load_dataframe
 import traceback
 
 # Retrieve RabbitMQ connection details.
@@ -25,6 +25,9 @@ channel = connection.channel()
 queue_name = 'sentiment_analysis_queue'
 channel.queue_declare(queue=queue_name, durable=True)
 
+# Determines whether sentiment analysis is done by term or by topic
+termed = False
+
 def callback(ch, method, properties, body):
     print("Received message:", body)
     try:
@@ -39,22 +42,24 @@ def callback(ch, method, properties, body):
 
     try:
         df = load_dataframe(meta)
-        all_sectioned_bodies = preproccess_sentiment_data(df, groups)
-        
-        sentiment_stats = []
-        for terms, sectioned_bodies in all_sectioned_bodies:
-            term_stats = run_roberta_analysis(terms, sectioned_bodies)
-            sentiment_stats.append(term_stats)
-        
+        if termed:
+            all_sectioned_bodies = preproccess_termed_sentiment_data(df, groups)
+            
+            sentiment_stats = []
+            for terms, sectioned_bodies in all_sectioned_bodies:
+                term_stats = run_roberta_analysis(terms, sectioned_bodies)
+                sentiment_stats.append(term_stats)
+        else:
+            sentiment_stats = run_topic_roberta_analysis(df, grouping_data["allTopics"])
+            
         print("Sentiment Analysis complete:", sentiment_stats)
 
         result_message = {
-            "meta": meta,
-            "groups": grouping_data,
+            "groups": groups,
             "sentiment": sentiment_stats
         }
         # Publish the reply to the callback queue specified in properties.reply_to
-        response_body = json.dumps({"result": result_message})
+        response_body = json.dumps(result_message)
         ch.basic_publish(
             exchange='',
             routing_key=properties.reply_to,  # send reply to the callback queue
