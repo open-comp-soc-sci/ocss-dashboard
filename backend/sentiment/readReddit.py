@@ -1,6 +1,8 @@
 import json
 import pandas as pd
 import requests
+import io
+import pyarrow as pa
 from roberta import run_roberta_analysis
 
 def load_dataframe(meta):
@@ -9,36 +11,46 @@ def load_dataframe(meta):
     option = meta["option"]
     startDate = meta.get("startDate", "")
     endDate = meta.get("endDate", "")
+    # Build the API URL and append date parameters if provided.
+    print('fetching from clickhouse')
 
-    # Build API URL
     api_url = f"https://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
-    if startDate: 
+    if startDate:
         api_url += f"&startDate={startDate}"
-    if endDate: 
+    if endDate:
         api_url += f"&endDate={endDate}"
+    try:
+        response = requests.get(api_url, verify=False)
+        response.raise_for_status()
+        # Read the binary Arrow stream.
+        buffer = io.BytesIO(response.content)
+        reader = pa.ipc.open_stream(buffer)
+        table = reader.read_all()
 
-    # Fetch data
-    response = requests.get(api_url, verify=False)
-    response.raise_for_status()
-    data = response.json()
+        # Optionally, convert the Arrow Table to a pandas DataFrame if needed.
+        df = table.to_pandas()
+        # Print the first 5 records from the "data" key.
+        # print(data["data"][0:5])
+        # Iterate over the actual records list.
+        # for record in data["data"]:
+            # print(record[-1])
 
-    # Convert to DataFrame
-    if option == "reddit_submissions":
-        df = pd.DataFrame(data["data"], columns=["id", "subreddit", "title", "selftext", "created_utc"])
-        df = df.rename(columns={"selftext": "body"})
-    else:
-        df = pd.DataFrame(data["data"], columns=["subreddit", "title", "body", "created_utc", "id"])
+    except Exception as e:
+        raise Exception(f"Error fetching data from API: {e}")
 
+    print('done fetching from clickhouse')
+    
+    df = df.rename(columns={"selftext": "body"})
     df = df.fillna("")
     return df
 
-def preproccess_sentiment_data(df, groups):
+def preproccess_termed_sentiment_data(df, groups):
     all_group_terms = []  # List of term lists
     all_sectioned_bodies = []
 
-    for group in groups.values():
-        for topic in group:
-            keywords = topic["ctfidf_keywords"]
+    for group in groups:
+        for topic in group["topics"]:
+            keywords = topic["ctfidfKeywords"]
             terms = [kw.strip() for kw in keywords.split(",")]
             all_group_terms.append(terms)
 
