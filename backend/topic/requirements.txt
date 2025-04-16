@@ -13,3 +13,4 @@ tqdm==4.66.2
 transformers==4.39.2
 umap_learn==0.5.5
 openpyxl
+pyarrow

@@ -30,7 +30,7 @@ yep: down build
 	# 	--model meta-llama/Llama-2-7b-chat-hf
 	# make logs
 	sleep 3
-	docker exec -it ollama_container ollama pull gemma2:27b
+	docker exec -it ollama_container ollama pull gemma3:27b
 	curl http://localhost:11434/api/tags
 
 

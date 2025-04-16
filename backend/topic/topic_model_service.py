@@ -27,5 +27,6 @@ def run_topic_model(data_source, output_dir, config):
     topic_model.run()
     
     # Instead of returning a generic message, return the detailed grouping results.
-    group_listing = topic_model.group_labeler.create_topic_group_listing()
+    group_listing = topic_model.group_labeler.create_topic_group_listing_json()
+
     return group_listing
