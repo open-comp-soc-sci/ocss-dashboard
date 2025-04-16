@@ -121,7 +121,6 @@ function Data() {
   const [isDeleting, setIsDeleting] = useState(false);
   const historyInitializedRef = useRef(false);
 
-  //ADD SEARCH HISTORY ERROR COMPONENT
   const RemoveSearch = async (searchId) => {
     try {
       setSearchData((prevData) => prevData.filter((item) => item.id !== searchId));
@@ -702,10 +701,7 @@ function Data() {
               paging: true,
               searching: true,
               responsive: true,
-              autoWidth: false,
-              scrollY: '600px',
-              scrollCollapse: true,
-              scroller: true,
+              autoWidth: false
               // Add any additional DataTable options as needed.
             });
           }
@@ -872,7 +868,7 @@ function Data() {
           subreddit,
           startDate: startDate.toISOString().split("T")[0],
           endDate: endDate.toISOString().split("T")[0],
-          groups: clusteringResults.result.groups
+          groups: clusteringResults.groups
         })
       });
 
@@ -1163,7 +1159,16 @@ function Data() {
       {clusteringResults && clusteringResults.groups && (
         <div className="row mt-4">
           <div className="col-md-12">
-            <h2>Topic Clustering Results</h2>
+            <h2>Topic Clustering Results
+              <img src="../public/cluster.svg"
+                alt="Topic Clustering Icon"
+                style={{
+                  maxWidth: '100px',
+                  maxHeight: '100px',
+                  border: '5px solid grey',
+                  borderRadius: '30%',
+                  marginLeft: '20px'
+                }} /></h2>
             <TopicTablesContainer
               groups={clusteringResults.groups}
               handleSaveResults={handleSaveResults}
@@ -1217,7 +1222,7 @@ function Data() {
 
       {/* Search History DataTable */}
       <div className="mt-5">
-        <h2>Search History</h2>
+        <h2><i className="fas fa-search me-1"></i> Search History</h2>
         {searchError && <p className="text-danger mt-3">Error: {searchError}</p>}
         <div id="clear-all-container" style={{ position: 'relative' }}>
           <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', right: '50px' }}>Clear All Searches</button>
