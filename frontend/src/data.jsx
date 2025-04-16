@@ -31,6 +31,7 @@ function Data() {
   const [searchError, setSearchError] = useState(null);
   const [option, setOption] = useState("reddit_submissions, reddit_comments");
   const [clusteringResults, setClusteringResults] = useState(null);
+  const [sentimentResults, setSentimentResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
   const [dataMessage, setDataMessage] = useState(false);
@@ -791,9 +792,9 @@ function Data() {
       });
       if (!response.ok) throw new Error("Sentiment analysis failed.");
       const resultData = await response.json();
-      console.log("Result Data:", resultData.result);
+      console.log("Result Data:", resultData.groups);
       // Set the state to the inner result object.
-      setClusteringResults(resultData.result);
+      setClusteringResults(resultData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -832,7 +833,7 @@ function Data() {
 
   const handleSaveResults = async () => {
     try {
-      console.log(clusteringResults)
+      console.log(clusteringResults.groups)
       const response = await fetch("/api/save_result", {
         method: "POST",
         headers: {
@@ -843,7 +844,7 @@ function Data() {
           subreddit,
           startDate: startDate.toISOString().split("T")[0],
           endDate: endDate.toISOString().split("T")[0],
-          groups: clusteringResults.result.groups
+          groups: clusteringResults.groups
         })
       });
 
@@ -895,12 +896,24 @@ function Data() {
   };
 
   let dynamicChartData, dynamicChartOptions;
-  if (clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0) {
-    const dynamicLabels = clusteringResults.result.groups.map(group => group.llmLabel);
+  if (clusteringResults.sentiment.length > 0) {
+    /*
+    const dynamicLabels = clusteringResults.result.groups.map(group.topics => group.llmLabel);
     const dynamicData = clusteringResults.result.groups.map(group => group.postCount);
+    */
     const dynamicBackgroundColors = dynamicLabels.map((_, index) => getBackgroundColor(index));
     const dynamicBorderColors = dynamicLabels.map((_, index) => getBorderColor(index));
 
+    const dynamicLabels = [];
+    const dynamicData = [];
+
+    clusteringResults.groups.forEach(group => {
+      const llmLabel = group.llmLabel;
+      group.topics.forEach(topic => {
+        dynamicLabels.push(`${llmLabel}: ${topic.topicLabel}`);
+        dynamicData.push(clusteringResults.sentiment[topic.topicNumber] ?? 0); // default to 0 if missing
+      });
+    });
     dynamicChartData = {
       labels: dynamicLabels,
       datasets: [{
@@ -1087,7 +1100,7 @@ function Data() {
               padding: '1rem'
             }}
           >
-            {clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0 ? (
+            {clusteringResults.sentiment.length > 0 ? (
               <Bar data={dynamicChartData} options={dynamicChartOptions} />
             ) : (
               <Bar data={staticChartData} options={staticChartOptions} />
@@ -1118,13 +1131,13 @@ function Data() {
         </button>
       </div>
 
-      {clusteringResults &&
-        clusteringResults.result &&
-        clusteringResults.result.groups && (
+      {
+        clusteringResults &&
+        clusteringResults.groups && (
           <div className="row mt-4">
             <div className="col-md-12">
               <h2>Topic Clustering Results</h2>
-              <TopicTablesContainer groups={clusteringResults.result.groups} />
+              <TopicTablesContainer groups={clusteringResults.groups} />
             </div>
           </div>
         )
@@ -1193,7 +1206,7 @@ function Data() {
           </table>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
 
