@@ -15,7 +15,10 @@ import 'datatables.net-buttons/js/buttons.print.min';
 import TopicTablesContainer from './TopicTablesContainer';
 import handleNotify from './toast';
 import { ToastContainer } from 'react-toastify';
+import {Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
 
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 function Data() {
   const [subreddit, setSubreddit] = useState('TrigeminalNeuralgia');
@@ -795,6 +798,82 @@ function Data() {
     }
   };
 
+const baseColors = [
+  '255, 99, 132',   
+  '255, 159, 64', 
+  '255, 205, 86',   
+  '75, 192, 192',  
+  '54, 162, 235',   
+  '153, 102, 255',  
+  '201, 203, 207'   
+];
+
+const getBackgroundColor = (index) => `rgba(${baseColors[index % baseColors.length]}, 0.2)`;
+const getBorderColor = (index) => `rgb(${baseColors[index % baseColors.length]})`;
+
+const staticLabels = ["January", "February", "March", "April", "May", "June", "July"];
+const staticBackgroundColors = staticLabels.map((_, index) => getBackgroundColor(index));
+const staticBorderColors = staticLabels.map((_, index) => getBorderColor(index));
+
+const staticChartData = {
+  labels: staticLabels,
+  datasets: [{
+    label: 'My First Dataset',
+    data: [65, 59, 80, 81, 56, 55, 40],
+    backgroundColor: staticBackgroundColors,
+    borderColor: staticBorderColors,
+    borderWidth: 1
+  }]
+};
+
+const staticChartOptions = {
+  scales: {
+    y: {
+      beginAtZero: true
+    }
+  }
+};
+
+  let dynamicChartData, dynamicChartOptions;
+if (clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0) {
+  const dynamicLabels = clusteringResults.result.groups.map(group => group.llmLabel);
+  const dynamicData = clusteringResults.result.groups.map(group => group.postCount);
+  const dynamicBackgroundColors = dynamicLabels.map((_, index) => getBackgroundColor(index));
+  const dynamicBorderColors = dynamicLabels.map((_, index) => getBorderColor(index));
+
+  dynamicChartData = {
+    labels: dynamicLabels,
+    datasets: [{
+      label: 'Sentiment Rating',
+      data: dynamicData,
+      backgroundColor: dynamicBackgroundColors,
+      borderColor: dynamicBorderColors,
+      borderWidth: 1
+    }]
+  };
+
+  dynamicChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: { display: true, text: 'Sentiment Rating' },
+      },
+      x: {
+        title: { display: true, text: 'Topic Clusters' },
+      },
+    },
+    plugins: {
+      title: {
+        display: true,
+        text: 'Topic Cluster Sentiment Analysis',
+      },
+      legend: { position: 'bottom' },
+    },
+  };
+}
+
   return (
     <div className="container mt-5">
       {/* Page Header */}
@@ -931,11 +1010,15 @@ function Data() {
               backgroundColor: '#333',
               height: '350px',
               borderRadius: '8px',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
+              padding: '1rem'
             }}
           >
-            {/* PUT CHART HERE */}
-          </div>
+            {clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0 ? (
+              <Bar data={dynamicChartData} options={dynamicChartOptions} />
+            ) : (
+              <Bar data={staticChartData} options={staticChartOptions} />
+            )}          </div>
           <button className="btn btn-secondary">Save as PNG</button>
 
           <div className="mt-4">
