@@ -15,6 +15,12 @@ const TopicTablesContainer = ({ groups }) => {
         {showPosts ? "Hide Posts" : "Show Posts"}
       </button>
 
+      <div className="mt-4">
+        <button className="btn btn-success" onClick={handleSaveResults}>
+          Publish Results
+        </button>
+      </div>
+
       {groups.map((group, index) => (
         <div key={index} className="group-section mt-3">
           <h4>Group {group.group}: {group.llmLabel}</h4>
