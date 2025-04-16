@@ -126,6 +126,7 @@ def getResult():
             )
 
             resultLabels = [group.topic_label for group in resultGroups]
+            resultCounts = [group.post_count for group in resultGroups]
             # Some topic clusters may have less than three groups
             while len(resultLabels) < 3:
                 resultLabels.append("N/A")
@@ -140,6 +141,9 @@ def getResult():
                 "topic1": resultLabels[0],
                 "topic2": resultLabels[1],
                 "topic3": resultLabels[2],
+                "topic1Count": resultCounts[0],
+                "topic2Count": resultCounts[1],
+                "topic3Count": resultCounts[2],
             })
 
         return jsonify({"results": results_data}), 200
