@@ -15,17 +15,21 @@ import 'datatables.net-buttons/js/buttons.print.min';
 import TopicTablesContainer from './TopicTablesContainer';
 import handleNotify from './toast';
 import { ToastContainer } from 'react-toastify';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement } from 'chart.js';
+import { Bar } from 'react-chartjs-2';
 
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 function Data() {
-  const [subreddit, setSubreddit] = useState('survivor');
+  const [subreddit, setSubreddit] = useState('TrigeminalNeuralgia');
   const [sentimentKeywords, setSentimentKeywords] = useState('');
-  const [startDate, setStartDate] = useState(new Date(2024, 11, 25)); // December 25, 2024
+  const [startDate, setStartDate] = useState(new Date(2024, 11, 2)); // December 2, 2024
   const [endDate, setEndDate] = useState(new Date(2024, 11, 31));     // December 31, 2024
   const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [error, setError] = useState(null);
-  const [option, setOption] = useState("reddit_submissions");
+  const [searchError, setSearchError] = useState(null);
+  const [option, setOption] = useState("reddit_submissions, reddit_comments");
   const [clusteringResults, setClusteringResults] = useState(null);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [searchData, setSearchData] = useState([]);
@@ -34,25 +38,52 @@ function Data() {
   // Add these new state variables at the top along with your others.
   const [includeSubmissions, setIncludeSubmissions] = useState(true);
   const [includeComments, setIncludeComments] = useState(true);
-
+  const [debouncedSubreddit, setDebouncedSubreddit] = useState(subreddit);
+  const isOptionValid = includeSubmissions || includeComments;
 
   // This ref controls whether the main results DataTable should fetch data
   const tableInitializedRef = useRef(false);
+  const subredditRef = useRef(subreddit);
+  const sentimentRef = useRef(sentimentKeywords);
+  const startDateRef = useRef(startDate);
+  const endDateRef = useRef(endDate);
+  const optionRef = useRef(option);
+  useEffect(() => { subredditRef.current = subreddit; }, [subreddit]);
+  useEffect(() => { sentimentRef.current = sentimentKeywords; }, [sentimentKeywords]);
+  useEffect(() => { startDateRef.current = startDate; }, [startDate]);
+  useEffect(() => { endDateRef.current = endDate; }, [endDate]);
+  useEffect(() => { optionRef.current = option; }, [option]);
+
+
 
   // Fetch search history immediately on mount.
   useEffect(() => {
     const fetchSearchHistory = async () => {
       try {
         const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-        if (!response.ok) throw new Error('Search History Fetch Failed');
+
+        if (!response.ok) {
+          setSearchError('Search history failed to fetch from Flask.');
+        }
+        else {
+          setSearchError(null);
+        }
+
         const data = await response.json();
         setSearchData(data.search_history || []);
       } catch (error) {
-        setError(error.message);
+        setSearchError(error.message);
       }
     };
     fetchSearchHistory();
   }, [email]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSubreddit(subreddit);
+    }, 1000);
+    return () => clearTimeout(handler);
+  }, [subreddit]);
 
   const AddSearch = async () => {
     try {
@@ -64,25 +95,33 @@ function Data() {
           sentimentKeywords: sentimentKeywords,
           startDate: startDate,
           endDate: endDate,
-          searchTerms: searchTerms,
+          option: option,
           email: email,
         }),
       });
-      if (!response.ok) throw new Error('Frontend Post to Backend Failed');
+
+      if (!response.ok) {
+        setError('Failed to submit and add search.');
+      }
+      else {
+        setError(null);
+      }
+
       const data = await response.json();
-      console.log('Search Query:', data);
+      //console.log('Search Query:', data);
       // Refresh search history after adding a search.
       const response2 = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
       const data2 = await response2.json();
       setSearchData(data2.search_history || []);
     } catch (error) {
-      setError(error.message);
+      setSearchError(error.message);
     }
   };
 
   const [isDeleting, setIsDeleting] = useState(false);
   const historyInitializedRef = useRef(false);
 
+  //ADD SEARCH HISTORY ERROR COMPONENT
   const RemoveSearch = async (searchId) => {
     try {
       setSearchData((prevData) => prevData.filter((item) => item.id !== searchId));
@@ -93,18 +132,24 @@ function Data() {
       });
 
       if (!response.ok) {
-        if (response.status === 404) {
-          console.warn(`Search with ID ${searchId} not found or already deleted.`);
-        }
-        throw new Error(`Failed to remove search ${searchId}`);
+        setSearchError('Failed to remove search ${searchId}.');
+      }
+      else {
+        setSearchError(null);
       }
 
-      console.log(`Search ID ${searchId} successfully removed from backend.`);
+      //console.log(`Search ID ${searchId} successfully removed from backend.`);
     } catch (error) {
-      setError(error.message);
+      setSearchError(error.message);
     } finally {
       const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-      if (!response.ok) throw new Error('Failed to fetch updated search history');
+
+      if (!response.ok) {
+        setSearchError('Failed to fetch updated search history.');
+      }
+      else {
+        setSearchError(null);
+      }
 
       const data = await response.json();
       setSearchData(data.search_history || []);
@@ -122,13 +167,24 @@ function Data() {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error("Failed to clear all searches");
+      if (!response.ok) {
+        setSearchError("Failed to clear all searches.");
+      }
+      else {
+        setSearchError(null);
+      }
 
       setSearchData([]);
     } catch (error) {
     } finally {
       const response = await fetch(`/api/get_search/${encodeURIComponent(email)}`);
-      if (!response.ok) throw new Error('Failed to fetch updated search history');
+
+      if (!response.ok) {
+        setSearchError("Failed to fetch updated search history.");
+      }
+      else {
+        setSearchError(null);
+      }
 
       const data = await response.json();
       setSearchData(data.search_history || []);
@@ -137,32 +193,48 @@ function Data() {
     }
   };
 
-  const fetchArrowData = async (start, length, draw, searchValue) => {
+  const fetchArrowData = async (start, length, draw, searchValue, setError) => {
     try {
       const adjustedEndDate = new Date(endDate);
       adjustedEndDate.setHours(23, 59, 59, 999);
-      
+
       // Example for fetchArrowData:
-      let url = `/api/get_arrow?subreddit=${encodeURIComponent(subreddit)}&option=${encodeURIComponent(option)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(adjustedEndDate.toISOString())}`;
+      let url = `/api/get_arrow?subreddit=${encodeURIComponent(debouncedSubreddit)}&option=${encodeURIComponent(option)}&startDate=${encodeURIComponent(startDate.toISOString())}&endDate=${encodeURIComponent(adjustedEndDate.toISOString())}`;
 
       if (searchValue) {
         url += `&search_value=${encodeURIComponent(searchValue)}`;
       }
-      
+
       const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Arrow data: ${response.statusText}`);
-      }
 
       // Get the binary data
       const arrayBuffer = await response.arrayBuffer();
-      
+
+      if (!response.ok) {
+        const errorText = new TextDecoder().decode(arrayBuffer);
+        try {
+          const errorJson = JSON.parse(errorText);
+          setError(errorJson.error || `Error ${response.status}`);
+        } catch (e) {
+          setError(`Error ${response.status}: ${errorText}`);
+        }
+
+        return {
+          draw: draw,
+          recordsTotal: 0,
+          recordsFiltered: 0,
+          data: []
+        };
+      } else {
+        setError(null);
+      }
+
       // Use Arrow.tableFromIPC (or your preferred method) to parse the data.
       const table = await Arrow.tableFromIPC(new Uint8Array(arrayBuffer));
-      
+
       // Debug the schema to verify column names.
-      console.log("Arrow table schema:", table.schema.fields.map(f => f.name));
-      
+      //console.log("Arrow table schema:", table.schema.fields.map(f => f.name));
+
       // Instead of converting all rows, only convert the ones for the requested page.
       const paginatedData = [];
       const totalRows = table.numRows;
@@ -181,7 +253,7 @@ function Data() {
         }
         paginatedData.push(row);
       }
-      
+
       return {
         draw: draw,
         recordsTotal: totalRows,
@@ -192,11 +264,11 @@ function Data() {
       console.error("Error processing Arrow data:", error);
       throw error;
     }
-  };  
-  
+  };
 
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
+    //console.log(searchData);
     if (searchData.length === 0) {
       document.getElementById("clear-all-container").style.display = 'none';
     } else {
@@ -211,7 +283,13 @@ function Data() {
           data: [],
           columns: [
             { data: "subreddit", title: "Subreddit" },
-            { data: "sentimentKeywords", title: "Keywords" },
+            {
+              data: "sentimentKeywords",
+              title: "Keywords",
+              render: function (data) {
+                return `<span class="truncate-text" title="${data}">${data}</span>`;
+              }
+            },
             {
               data: "startDate",
               title: "Start Date",
@@ -226,18 +304,34 @@ function Data() {
                 return new Date(data).toLocaleDateString('en-US');
               }
             },
+            {
+              data: "option",
+              title: "Post Option",
+              render: function (data) {
+                if (!data) return "";
+
+                const options = data.split(",").map(opt => opt.trim());
+                const labels = options.map(opt => {
+                  if (opt === "reddit_comments") return "Comments";
+                  if (opt === "reddit_submissions") return "Submissions";
+                  return opt;
+                });
+
+                return labels.join(", ");
+              }
+            },
             { data: "created_utc", title: "Created Date" },
             {
               data: null,
               title: "Actions",
               render: function (data, type, row) {
-                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" disabled>Go To Search</a>`;
+                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
                 const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}" disabled>Delete</button>`;
                 return searchButton + " " + deleteButton;
               }
             }
           ],
-          order: [[4, 'desc']],
+          order: [[5, 'desc']],
           paging: false,
           searching: false,
           ordering: false,
@@ -262,7 +356,13 @@ function Data() {
       data: searchData,
       columns: [
         { data: "subreddit", title: "Subreddit" },
-        { data: "sentimentKeywords", title: "Keywords" },
+        {
+          data: "sentimentKeywords",
+          title: "Keywords",
+          render: function (data) {
+            return `<span class="truncate-text" title="${data}">${data}</span>`;
+          }
+        },
         {
           data: "startDate",
           title: "Start Date",
@@ -277,18 +377,34 @@ function Data() {
             return new Date(data).toLocaleDateString('en-US');
           }
         },
+        {
+          data: "option",
+          title: "Post Option",
+          render: function (data) {
+            if (!data) return "";
+
+            const options = data.split(",").map(opt => opt.trim());
+            const labels = options.map(opt => {
+              if (opt === "reddit_comments") return "Comments";
+              if (opt === "reddit_submissions") return "Submissions";
+              return opt;
+            });
+
+            return labels.join(", ");
+          }
+        },
         { data: "created_utc", title: "Created Date" },
         {
           data: null,
           title: "Actions",
           render: function (data, type, row) {
-            const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}">Go To Search</a>`;
+            const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
             const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}">Delete</button>`;
             return searchButton + " " + deleteButton;
           }
         }
       ],
-      order: [[4, 'desc']],
+      order: [[5, 'desc']],
       paging: true,
       searching: false,
       ordering: true,
@@ -312,16 +428,33 @@ function Data() {
     }
 
     $(document).on("click", ".go-to-btn", function () {
-      const subreddit = $(this).data("subreddit").replace(/^r\//, '');
-      const sentiment = $(this).data("sentiment");
-      const startDate = new Date($(this).data("start-date"));
-      const endDate = new Date($(this).data("end-date"));
-      const searchValue = `${subreddit} ${sentiment} ${startDate.toISOString()} ${endDate.toISOString()}`;
+      const subredditGo = $(this).data("subreddit").replace(/^r\//, '');
+      const sentimentGo = $(this).data("sentiment");
+      const startDateGo = new Date($(this).data("start-date"));
+      const endDateGo = new Date($(this).data("end-date"));
+      const optionGo = $(this).data("option");
+      const searchValue = `${subredditGo} ${sentimentGo} ${startDateGo.toISOString()} ${endDateGo.toISOString()} ${optionGo}`;
 
-      setSubreddit(subreddit);
-      setSentimentKeywords(sentiment);
-      setStartDate(startDate);
-      setEndDate(endDate);
+      if (optionGo.includes('reddit_submissions')) {
+        setIncludeSubmissions(true);
+      }
+      else {
+        setIncludeSubmissions(false);
+      }
+
+      if (optionGo.includes('reddit_comments')) {
+        setIncludeComments(true);
+      }
+      else {
+        setIncludeComments(false);
+      }
+
+      setDebouncedSubreddit(subredditGo);
+      setSubreddit(subredditGo);
+      setSentimentKeywords(sentimentGo);
+      setStartDate(startDateGo);
+      setEndDate(endDateGo);
+      setOption(optionGo);
 
       //issue where go to needs to be clicked twice
       setTimeout(() => {
@@ -330,8 +463,8 @@ function Data() {
           if ($.fn.DataTable.isDataTable("#click-table")) {
             $("#click-table").DataTable().ajax.reload();
           }
-          if (subreddit) {
-            getSubredditIcon(subreddit);
+          if (subredditGo) {
+            getSubredditIcon(subredditGo);
           }
         });
       }, 50);
@@ -357,21 +490,23 @@ function Data() {
     setSearchTerms(searchTerms.filter(t => t !== term));
   };
 
+  //WILL REMOVE, REDUNDANT
   const fetchData = async (start, length, draw, searchValue) => {
     try {
       const response = await fetch(
-        `/api/get_all_click?length=${length}&start=${start}&draw=${draw}` +
+        `/api/get_arrow?length=${length}&start=${start}&draw=${draw}` +
         `&subreddit=${encodeURIComponent(subreddit)}` +
-        `&option=${encodeURIComponent(selectedOption)}` +
+        `&option=${encodeURIComponent(option)}` +
         `&search_value=${encodeURIComponent(searchValue)}` +
         `&sentimentKeywords=${encodeURIComponent(sentimentKeywords)}` +
         `&startDate=${encodeURIComponent(startDate.toISOString())}` +
-        `&endDate=${encodeURIComponent(endDate.toISOString())}`
+        `&endDate=${encodeURIComponent(endDate.toISOString())}` +
+        `&option=${encodeURIComponent(option)}`
       );
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching data for main datatables:", error);
     }
   };
 
@@ -383,9 +518,9 @@ function Data() {
         serverSide: true,
         paging: true,
         pagingType: "full_numbers",
-        dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'fB>>" +
-        "<'row'<'col-sm-12'tr>>" +
-        "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+        dom: "<'row'<'col-sm-12 col-md-6'fB><'col-sm-12 col-md-6'l>>" +
+          "<'row'<'col-sm-12'tr>>" +
+          "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
         searching: true,
         ajax: function (data, callback, settings) {
           if (!tableInitializedRef.current) {
@@ -399,10 +534,11 @@ function Data() {
           }
           const { start, length, draw, search } = data;
           // Use the Arrow endpoint instead of the old JSON endpoint.
-            fetchArrowData(start, length, draw, search.value)
+          fetchArrowData(start, length, draw, search.value, setError)
             .then(apiData => {
               callback(apiData);
-              if (apiData.recordsFiltered <= 3000) {
+              //console.log(apiData.recordsFiltered)
+              if (apiData.recordsFiltered <= 3000 && apiData.recordsFiltered > 0) {
                 setDataMessage(true);
               } else {
                 setDataMessage(false);
@@ -525,7 +661,7 @@ function Data() {
             last: ">>"
           }
         }
-        });
+      });
 
       $("#goToPageButton").on("click", function () {
         const page = parseInt($("#pageInput").val(), 10) - 1;
@@ -543,9 +679,10 @@ function Data() {
     return () => {
       if ($.fn.DataTable.isDataTable("#click-table")) {
         $("#click-table").DataTable().destroy();
+        $("#click-table").empty();
       }
     };
-  }, [subreddit, option, sentimentKeywords, startDate, endDate]);
+  }, [debouncedSubreddit, option, sentimentKeywords, startDate, endDate]);
 
   useEffect(() => {
     if (clusteringResults && clusteringResults.groups) {
@@ -563,6 +700,9 @@ function Data() {
               searching: true,
               responsive: true,
               autoWidth: false,
+              scrollY: '600px',
+              scrollCollapse: true,
+              scroller: true,
               // Add any additional DataTable options as needed.
             });
           }
@@ -570,9 +710,15 @@ function Data() {
       });
     }
   }, [clusteringResults]);
-  
-  
-  
+
+  //Join the options for both main and search history tables to work.
+  useEffect(() => {
+    const selectedOptions = [];
+    if (includeSubmissions) selectedOptions.push("reddit_submissions");
+    if (includeComments) selectedOptions.push("reddit_comments");
+
+    setOption(selectedOptions.join(", "));
+  }, [includeSubmissions, includeComments]);
 
   // When Submit is clicked, mark table as initialized and reload the DataTable.
   const handleSubmit = async (e) => {
@@ -584,8 +730,7 @@ function Data() {
     if (includeComments) options.push("reddit_comments");
     const combinedOption = options.join(",");
     setOption(combinedOption);
-    
-    
+
     setError(null);
     await AddSearch();  // (Make sure AddSearch also passes along the chosen option if needed.)
     tableInitializedRef.current = true;
@@ -596,26 +741,42 @@ function Data() {
       getSubredditIcon(subreddit);
     }
   };
-  
+
+  useEffect(() => {
+    // Automatically run the search on page load. Adjust to only fetch data and not add to search history.
+    const searchValue = `${subreddit} ${sentimentKeywords} ${startDate.toISOString()} ${endDate.toISOString()}`;
+
+    fetchData(0, 10, 1, searchValue).then(() => {
+      tableInitializedRef.current = true;
+      if ($.fn.DataTable.isDataTable("#click-table")) {
+        $("#click-table").DataTable().ajax.reload();
+      }
+      if (subreddit) {
+        getSubredditIcon(subreddit);
+      }
+    }).catch((error) => {
+      console.error("Error fetching data for main datatables:", error);
+    });
+  }, []);
 
   const runSentimentAnalysis = async () => {
-  // Combine the current checkbox values on the fly.
-  let combinedOption = "";
-  if (includeSubmissions && includeComments) {
-    combinedOption = "reddit_submissions,reddit_comments";
-  } else if (includeSubmissions) {
-    combinedOption = "reddit_submissions";
-  } else if (includeComments) {
-    combinedOption = "reddit_comments";
-  } else {
-    // You could default to one or show an error if neither is selected.
-    combinedOption = "";
-  }
+    // Combine the current checkbox values on the fly.
+    let combinedOption = "";
+    if (includeSubmissions && includeComments) {
+      combinedOption = "reddit_submissions,reddit_comments";
+    } else if (includeSubmissions) {
+      combinedOption = "reddit_submissions";
+    } else if (includeComments) {
+      combinedOption = "reddit_comments";
+    } else {
+      // You could default to one or show an error if neither is selected.
+      combinedOption = "";
+    }
 
-  // Clear previous results.
-  setClusteringResults(null);
-  setLoadingSentiment(true);
-  setError(null);
+    // Clear previous results.
+    setClusteringResults(null);
+    setLoadingSentiment(true);
+    setError(null);
 
     try {
       const response = await fetch("/api/run_sentiment", {
@@ -638,7 +799,7 @@ function Data() {
     } finally {
       setLoadingSentiment(false);
     }
-  };  
+  };
 
   useEffect(() => {
     if (clusteringResults) {
@@ -651,14 +812,14 @@ function Data() {
       const response = await fetch(`https://www.reddit.com/r/${subReddit}/about.json`);
       const data = await response.json();
       let subredditIcon = data.data.community_icon;
-      
+
       // Remove query parameters from the URL by cutting off at the question mark
       if (subredditIcon && subredditIcon.includes('?')) {
         subredditIcon = subredditIcon.split('?')[0];
       }
-      
-      console.log('Cleaned Subreddit Icon:', subredditIcon);
-      
+
+      //console.log('Cleaned Subreddit Icon:', subredditIcon);
+
       if (!subredditIcon) {
         setSubredditIcon('../public/reddit-1.svg');
       } else {
@@ -668,6 +829,110 @@ function Data() {
       setSubredditIcon('../public/reddit-1.svg');
     }
   };
+
+  const handleSaveResults = async () => {
+    try {
+      console.log(clusteringResults)
+      const response = await fetch("/api/save_result", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          email,
+          subreddit,
+          startDate: startDate.toISOString().split("T")[0],
+          endDate: endDate.toISOString().split("T")[0],
+          groups: clusteringResults.result.groups
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(`Failed to save: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error saving result:", error);
+      setError("An error occurred while saving the result.");
+    }
+  };
+
+  const baseColors = [
+    '255, 99, 132',
+    '255, 159, 64',
+    '255, 205, 86',
+    '75, 192, 192',
+    '54, 162, 235',
+    '153, 102, 255',
+    '201, 203, 207'
+  ];
+
+  const getBackgroundColor = (index) => `rgba(${baseColors[index % baseColors.length]}, 0.2)`;
+  const getBorderColor = (index) => `rgb(${baseColors[index % baseColors.length]})`;
+
+  const staticLabels = ["January", "February", "March", "April", "May", "June", "July"];
+  const staticBackgroundColors = staticLabels.map((_, index) => getBackgroundColor(index));
+  const staticBorderColors = staticLabels.map((_, index) => getBorderColor(index));
+
+  const staticChartData = {
+    labels: staticLabels,
+    datasets: [{
+      label: 'My First Dataset',
+      data: [65, 59, 80, 81, 56, 55, 40],
+      backgroundColor: staticBackgroundColors,
+      borderColor: staticBorderColors,
+      borderWidth: 1
+    }]
+  };
+
+  const staticChartOptions = {
+    scales: {
+      y: {
+        beginAtZero: true
+      }
+    }
+  };
+
+  let dynamicChartData, dynamicChartOptions;
+  if (clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0) {
+    const dynamicLabels = clusteringResults.result.groups.map(group => group.llmLabel);
+    const dynamicData = clusteringResults.result.groups.map(group => group.postCount);
+    const dynamicBackgroundColors = dynamicLabels.map((_, index) => getBackgroundColor(index));
+    const dynamicBorderColors = dynamicLabels.map((_, index) => getBorderColor(index));
+
+    dynamicChartData = {
+      labels: dynamicLabels,
+      datasets: [{
+        label: 'Sentiment Rating',
+        data: dynamicData,
+        backgroundColor: dynamicBackgroundColors,
+        borderColor: dynamicBorderColors,
+        borderWidth: 1
+      }]
+    };
+
+    dynamicChartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'Sentiment Rating' },
+        },
+        x: {
+          title: { display: true, text: 'Topic Clusters' },
+        },
+      },
+      plugins: {
+        title: {
+          display: true,
+          text: 'Topic Cluster Sentiment Analysis',
+        },
+        legend: { position: 'bottom' },
+      },
+    };
+  }
 
   return (
     <div className="container mt-5">
@@ -694,6 +959,11 @@ function Data() {
                   placeholder="Enter subreddit (e.g. news)"
                 />
               </div>
+              {!subreddit.trim() && (
+                <div className="text-danger mt-2">
+                  Please enter a subreddit.
+                </div>
+              )}
             </div>
 
             <div className="mt-4">
@@ -723,6 +993,7 @@ function Data() {
               </div>
             </div>
 
+            {/* Maybe hardcode the */}
             <div className="mt-4">
               <h2>Dates</h2>
               <div className="mt-3">
@@ -735,6 +1006,9 @@ function Data() {
                   endDate={endDate}
                   className="form-control"
                   placeholderText="Start Date"
+                  showMonthDropdown
+                  showYearDropdown
+                  dropdownMode="select"
                 />
               </div>
               <div className="mt-3">
@@ -748,72 +1022,100 @@ function Data() {
                   minDate={startDate}
                   className="form-control"
                   placeholderText="End Date"
+                  showMonthDropdown
+                  showYearDropdown
+                  dropdownMode="select"
                 />
               </div>
             </div>
 
             <div className="mt-4">
-            <h2>Search Options</h2>
-            <div className="form-group">
-              <label>Choose which data to view:</label>
-              <div>
-                <label className="form-check-label">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    checked={includeSubmissions}
-                    onChange={() => setIncludeSubmissions(!includeSubmissions)}
-                  />
-                  Submissions
-                </label>
-              </div>
-              <div>
-                <label className="form-check-label">
-                  <input
-                    type="checkbox"
-                    className="form-check-input"
-                    checked={includeComments}
-                    onChange={() => setIncludeComments(!includeComments)}
-                  />
-                  Comments
-                </label>
+              <h2>Search Options</h2>
+              <div className="form-group">
+                <label>Choose which data to view:</label>
+                <div>
+                  <label className="form-check-label">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={includeSubmissions}
+                      onChange={() => setIncludeSubmissions(!includeSubmissions)}
+                    />
+                    Submissions
+                  </label>
+                </div>
+                <div>
+                  <label className="form-check-label">
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={includeComments}
+                      onChange={() => setIncludeComments(!includeComments)}
+                    />
+                    Comments
+                  </label>
+                </div>
+                {!isOptionValid && (
+                  <div className="text-danger mt-2">
+                    Please select at least one option.
+                  </div>
+                )}
               </div>
             </div>
-          </div>
 
 
             <div className="mt-4">
-              <button type="submit" className="btn btn-primary mt-2">Submit</button>
+              <button type="submit" className="btn btn-primary mt-2" disabled={!isOptionValid || !subreddit.trim()}>
+                Submit
+              </button>
             </div>
           </form>
-          {error && <p className="text-danger mt-3">Error: {error}</p>}
+          {/* {error && <p className="text-danger mt-3">Error: {error}</p>} */}
         </div>
 
         {/* Sentiment Analysis Section */}
-        
+
         <div className="col-md-8">
-        <h2>Sentiment Analysis</h2>
+          <h2>Sentiment Analysis</h2>
           <p>Posts within the selected date range.</p>
           <div
             style={{
               backgroundColor: '#333',
               height: '350px',
               borderRadius: '8px',
-              marginBottom: '1rem'
+              marginBottom: '1rem',
+              padding: '1rem'
             }}
           >
-            {/* PUT CHART HERE */}
-          </div>
+            {clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0 ? (
+              <Bar data={dynamicChartData} options={dynamicChartOptions} />
+            ) : (
+              <Bar data={staticChartData} options={staticChartOptions} />
+            )}          </div>
           <button className="btn btn-secondary">Save as PNG</button>
 
           <div className="mt-4">
-            <button className="btn btn-success" onClick={runSentimentAnalysis}>
+            <button
+              className="btn btn-success"
+              onClick={runSentimentAnalysis}
+              disabled={error && error.includes("does not exist")}
+            >
               {loadingSentiment ? 'Analyzing...' : 'Run Topic Clustering'}
             </button>
           </div>
+
           <ToastContainer />
-    
+
         </div>
+
+
+      </div>
+
+      {/* Test Button Will Remove*/}
+      <div className="mt-4">
+        <button className="btn btn-success" onClick={handleSaveResults}>
+          Publish Results Test Function
+        </button>
       </div>
 
       {clusteringResults &&
@@ -841,14 +1143,16 @@ function Data() {
                 maxWidth: '100px',
                 maxHeight: '100px',
                 border: '5px solid white',
-                borderRadius: '50%',  
+                borderRadius: '50%',
                 transform: 'translateY(-30px)',
                 marginLeft: '10px'
               }}
             />
           )}
         </div>
-        <h5>{dataMessage && <div style={{ color: 'red' }}>Data contains 3000 rows or less and may be insufficient.</div>}</h5>
+        <h5>{dataMessage && <div style={{ color: 'orange' }}>Data contains 3000 rows or less and may be insufficient for insightful topic clustering.</div>}</h5>
+        <h5>{error && <div style={{ color: 'red', marginTop: '1rem' }}>Error: {error}</div>}</h5>
+
         <div>
           <table id="click-table" className="display">
             <thead>
@@ -870,8 +1174,9 @@ function Data() {
       {/* Search History DataTable */}
       <div className="mt-5">
         <h2>Search History</h2>
+        {searchError && <p className="text-danger mt-3">Error: {searchError}</p>}
         <div id="clear-all-container" style={{ position: 'relative' }}>
-          <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', right: '150px' }}>Clear All Searches</button>
+          <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', right: '50px' }}>Clear All Searches</button>
         </div>
         <div>
           <table id="search-history-table" className="display">
