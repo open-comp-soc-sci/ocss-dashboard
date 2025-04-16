@@ -1,5 +1,6 @@
 run: down build
-	docker run --name sentiment_container -v $(PWD):/app sentiment
+	docker run --name sentiment_container -d -v $(PWD):/app sentiment
+	make logs
 
 
 
