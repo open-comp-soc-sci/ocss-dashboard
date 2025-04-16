@@ -8,7 +8,8 @@ import os
 import json
 import pika
 from . import clickHouse_BP
-from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
+from ..rpc_client import TopicModelRpcClient  # Import the RPC client modules
+from ..rpc_client import SentimentAnalysisRpcClient 
 
 import csv
 import io
@@ -135,26 +136,26 @@ def get_arrow():
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
-    try:
-        # Retrieve parameters from the POST body.
-        request_data = request.get_json() or {}
-        parameters = {
-            "data_source": request_data.get("data_source", "api"),
-            "subreddit": request_data.get("subreddit", ""),
-            "option": request_data.get("option", "reddit_submissions"),
-            "startDate": request_data.get("startDate", ""),   # Passed as ISO string
-            "endDate": request_data.get("endDate", "")          # Passed as ISO string
-            # Add any additional parameters as needed.
-        }
-        # parameters['subreddit'] = parameters['subreddit'].lower()
-        message = json.dumps(parameters)
-        rpc_client = TopicModelRpcClient()
-        result = rpc_client.call(message)
-        return jsonify({"result": json.loads(result)}), 200
+
+    # Retrieve parameters from the POST body.
+    request_data = request.get_json() or {}
+    parameters = {
+        "data_source": request_data.get("data_source", "api"),
+        "subreddit": request_data.get("subreddit", ""),
+        "option": request_data.get("option", "reddit_submissions"),
+        "startDate": request_data.get("startDate", ""),   # Passed as ISO string
+        "endDate": request_data.get("endDate", "")          # Passed as ISO string
+        # Add any additional parameters as needed.
+    }
+    # parameters['subreddit'] = parameters['subreddit'].lower()
+    message = json.dumps(parameters)
+    topic_rpc_client = TopicModelRpcClient()
+    result = topic_rpc_client.call(message)
+    sentiment_rpc_client = SentimentAnalysisRpcClient()
+    result = sentiment_rpc_client.call(result)
+    return jsonify({"result": json.loads(result)}), 200
 
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
 def export_data():
