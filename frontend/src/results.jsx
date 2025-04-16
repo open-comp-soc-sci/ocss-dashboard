@@ -55,7 +55,8 @@ const Results = () => {
         try {
             const response = await fetch(`/api/get_topics/${resultId}`);
             const data = await response.json();
-            console.log(data.topics);
+
+            //console.log(data.topics);
 
             if (data.error) {
                 setError("Error fetching Topic Clustering data for this result.");
@@ -141,27 +142,33 @@ const Results = () => {
                                                                             return a.group_number - b.group_number;
                                                                         }
                                                                         return a.id - b.id;
-                                                                    }).map((topic) => (
-                                                                        <div key={topic.id} className="col-md-4 mb-3">
+                                                                    })
+                                                                    .map((topic) => (
+                                                                        <div key={`${topic.group_number}-${topic.topic_number}`} className="col-md-6 mb-3">
                                                                             <div className="card h-100">
                                                                                 <div className="card-body">
                                                                                     <h6 className="card-title">
-                                                                                        Group {topic.group_number}: {topic.topic_label}
+                                                                                        <strong>Group {topic.group_number}:</strong> {topic.group_label}
                                                                                     </h6>
-                                                                                    <p className="card-text">
-                                                                                        Posts: {topic.post_count}
-                                                                                    </p>
-                                                                                    <ul className="small">
-                                                                                        {topic.topics && topic.topics.map((word, index) => (
-                                                                                            <li key={index}>{word}</li>
-                                                                                        ))}
-                                                                                    </ul>
+
+                                                                                    <div className="mb-2">
+                                                                                        <strong>Topic {topic.topic_number}</strong>: {topic.topic_label}
+                                                                                        <p className="mb-2"><strong>Post Count:</strong> {topic.post_count}</p>
+                                                                                        {topic.example_posts && (
+                                                                                            <p className="mb-2">
+                                                                                                <strong>Sample Post:</strong>{" "}
+                                                                                                {topic.example_posts.find(p => p.topicNumber === topic.topic_number)?.samplePost || "N/A"}
+                                                                                            </p>
+                                                                                        )}
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
                                                                     ))}
                                                             </div>
-                                                        )}
+                                                        )
+                                                        }
+
                                                     </div>
                                                 </div>
                                             </div>
