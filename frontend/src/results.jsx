@@ -56,16 +56,16 @@ const Results = () => {
             const response = await fetch(`/api/get_topics/${resultId}`);
             const data = await response.json();
 
-            //console.log(data.topics);
+            console.log(data.topics);
 
             if (data.error) {
-                setError("Error fetching Topic Clustering data for this result.");
+                setError("Error fetching topic clustering data for this result.");
             } else {
                 setTopicsCard(data.topics);
                 setError(null);
             }
         } catch (err) {
-            setError("Error fetching Topic Clustering data for this result.");
+            setError("Error fetching topic clustering data for this result.");
         }
     };
 
@@ -85,7 +85,7 @@ const Results = () => {
                             {group.map((resultCard, columnIndex) => (
                                 <div className="col-md-4" key={columnIndex}>
                                     <div className="card h-100 p-3 shadow-lg">
-                                        <h5 className="card-title">Experiment</h5>
+                                        <h5 className="card-title">Experiment {resultCard.id}</h5>
                                         <p className="card-text"><span className="text-decoration-underline">User:</span> {resultCard.email}</p>
 
                                         <h5 className="card-title mt-3">Search Parameters</h5>
@@ -127,7 +127,6 @@ const Results = () => {
                                                         <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                     </div>
                                                     <div className="modal-body">
-                                                        <h1>(Testing) See if example posts can be added as well.</h1>
                                                         {error && <p className="text-danger">{error}</p>}
 
                                                         {!error && topicsCard.length === 0 && (
@@ -151,11 +150,12 @@ const Results = () => {
                                                                                         <strong>Group {topic.group_number}:</strong> {topic.group_label}
                                                                                     </h6>
 
-                                                                                    <div className="mb-2">
-                                                                                        <strong>Topic {topic.topic_number}</strong>: {topic.topic_label}
-                                                                                        <p className="mb-2"><strong>Post Count:</strong> {topic.post_count}</p>
+                                                                                    <div>
+                                                                                        <strong>Topic {topic.topic_number}</strong>: {topic.topicLabel}
+                                                                                        <p className="mb-0"><strong>Keywords:</strong> {topic.ctfidfKeywords}</p>
+                                                                                        <p className="mb-0"><strong>Post Count:</strong> {topic.postCount}</p>
                                                                                         {topic.example_posts && (
-                                                                                            <p className="mb-2">
+                                                                                            <p className="mb-1">
                                                                                                 <strong>Sample Post:</strong>{" "}
                                                                                                 {topic.example_posts.find(p => p.topicNumber === topic.topic_number)?.samplePost || "N/A"}
                                                                                             </p>

@@ -46,7 +46,7 @@ class TopicData(db.Model):
     result_id = db.Column(db.Integer, db.ForeignKey('resultData.id', ondelete='CASCADE'), nullable=False)
     group_number = db.Column(db.Integer, nullable=False)
     group_label = db.Column(db.String, nullable=False)
-    topics = db.Column(db.JSON, nullable=False) # Should include topic number, topic keywords, and post count
+    topics = db.Column(db.JSON, nullable=False) # Should include topic number, topic keywords, post count, and topic label
     example_posts = db.Column(db.JSON, nullable=True) # Should include topic number and example posts, will they always have an example post?
     
 # unimplemented RedditData model class. 
