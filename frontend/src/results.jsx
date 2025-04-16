@@ -105,6 +105,7 @@ const Results = () => {
 
                                         <button
                                             type="button"
+                                            margin-top="auto"
                                             className="btn btn-primary mt-2"
                                             data-bs-toggle="modal"
                                             data-bs-target="#showTopics"
@@ -120,7 +121,7 @@ const Results = () => {
                                             aria-labelledby="showTopics"
                                             aria-hidden="true"
                                         >
-                                            <div className="modal-dialog modal-lg">
+                                            <div className="modal-dialog custom-modal-width">
                                                 <div className="modal-content">
                                                     <div className="modal-header">
                                                         <h5 className="modal-title" id="showTopics">Topic Clustering Information</h5>
@@ -177,6 +178,7 @@ const Results = () => {
                                         {email === resultCard.email && (
                                             <button
                                                 className="btn btn-danger mt-3"
+                                                margin-top="auto"
                                                 onClick={() => handleRemoveResult(resultCard.id)}
                                             >
                                                 Remove Result
