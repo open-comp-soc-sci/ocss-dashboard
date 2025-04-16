@@ -2,6 +2,7 @@ from flask import jsonify, request
 from datetime import datetime, timezone
 from app.models import SearchHistory
 from app.models import ResultData
+from app.models import TopicData
 from app.extensions import db
 from . import searchHistory_BP
 
@@ -27,7 +28,6 @@ def addSearch():
         created_utc=datetime.now(timezone.utc)
     )
 
-    #Could include try here, not sure if any parameters can fail this though
     db.session.add(new_search)
     db.session.commit()
     return jsonify({"search_id": new_search.id}), 201
@@ -87,9 +87,22 @@ def saveResult():
             startDate=datetime.strptime(data["startDate"], "%Y-%m-%d").date(),
             endDate=datetime.strptime(data["endDate"], "%Y-%m-%d").date()
         )
-
         db.session.add(new_result)
         db.session.commit()
+
+        groups = data['groups']
+        for group in groups:
+            topicCluster = TopicData(
+                email=data["email"],
+                result_id=new_result.id,
+                group_number=group['group'],
+                topic_label=group['topic_label'],
+                topics=group['topics'],
+                post_count=group['post_count']
+            )
+            db.session.add(topicCluster)
+        db.session.commit()
+
 
         return jsonify({"message": "Saved successfully"}), 201
     except Exception as e:
@@ -103,6 +116,20 @@ def getResult():
 
         results_data = []
         for result in results:
+             # 3 Highest Post Count Groups
+            resultGroups = (
+                TopicData.query
+                .filter_by(result_id=result.id)
+                .order_by(TopicData.post_count.desc())
+                .limit(3)
+                .all()
+            )
+
+            resultLabels = [group.topic_label for group in resultGroups]
+            # Some topic clusters may have less than three groups
+            while len(resultLabels) < 3:
+                resultLabels.append("N/A")
+
             results_data.append({
                 "id": result.id,
                 "email": result.email,
@@ -110,16 +137,39 @@ def getResult():
                 "startDate": result.startDate.isoformat(),
                 "endDate": result.endDate.isoformat(),
                 "created_utc": result.created_utc.isoformat(),
-                # Add topics eventually
-                "topic1": getattr(result, "topic1", "N/A"),
-                "topic2": getattr(result, "topic2", "N/A"),
-                "topic3": getattr(result, "topic3", "N/A"),
+                "topic1": resultLabels[0],
+                "topic2": resultLabels[1],
+                "topic3": resultLabels[2],
             })
 
         return jsonify({"results": results_data}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@searchHistory_BP.route("/api/get_topics/<int:result_id>", methods=["GET"])
+def getTopics(result_id):
+    try:
+        topics = TopicData.query.filter_by(result_id=result_id).all()
+
+        if not topics:
+            return jsonify({"error": "There are no topic clusters for this result."}), 404
+
+        resultTopics = []
+        for topic in topics:
+            resultTopics.append({
+                "id": topic.id,
+                "group_number": topic.group_number,
+                "topic_label": topic.topic_label,
+                "topics": topic.topics,
+                "post_count": topic.post_count
+            })
+
+        return jsonify({"topics": resultTopics}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
     
 @searchHistory_BP.route("/api/remove_result/<int:id>", methods=["DELETE"])
 def removeResult(id):
