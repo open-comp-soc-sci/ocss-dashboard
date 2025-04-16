@@ -1,0 +1,6 @@
+pika
+numpy
+pandas
+requests
+transformers
+torch

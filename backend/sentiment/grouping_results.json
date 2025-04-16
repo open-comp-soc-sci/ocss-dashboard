@@ -1,0 +1,149 @@
+{
+  "meta": {
+    "subreddit": "SabrinaCarpenter",
+    "option": "reddit_comments",
+    "startDate": "2024-01-01T05:00:00.000Z",
+    "endDate": "2024-12-31T05:00:00.000Z"
+  },
+  "groups": {
+    "1": [
+      {
+        "topic_index": 0,
+        "topic_label": "Ticket Acquisition, Pricing & Costs, Presale Access",
+        "ctfidf_keywords": "presale code, got tickets, presale, ticket, tickets"
+      },
+      {
+        "topic_index": 1,
+        "topic_label": "Physical Appearance, Fashion, Positive Sentiment",
+        "ctfidf_keywords": "gorgeous, beautiful sexy, beautiful, stunning, pretty"
+      },
+      {
+        "topic_index": 3,
+        "topic_label": "Fan Reception, Music Consumption, Live Performance",
+        "ctfidf_keywords": "song, songs, album, liked, fav"
+      },
+      {
+        "topic_index": 4,
+        "topic_label": "Online Harassment, Social Media Behavior, Community Interaction",
+        "ctfidf_keywords": "discussion, comments, discussions, subreddit, posting"
+      },
+      {
+        "topic_index": 5,
+        "topic_label": "Appearance, Fashion, Body Image",
+        "ctfidf_keywords": "like makeup, outfit, makeup, outfits, wearing"
+      },
+      {
+        "topic_index": 6,
+        "topic_label": "Desire, Appreciation, Appearance",
+        "ctfidf_keywords": "want christmas, want, christmas, mmh want, wish"
+      },
+      {
+        "topic_index": 7,
+        "topic_label": "Social Media Analysis, Celebrity Culture, Fan Communities",
+        "ctfidf_keywords": "sabrina instagram, source sabrina, post sabrina, instagram post, instagram"
+      },
+      {
+        "topic_index": 9,
+        "topic_label": "Online Communities, Referral Networks, Media Collecting",
+        "ctfidf_keywords": "refer sabrinacarpenterdisc, sabrinacarpenterdisc, sabrinacarpenterdisc refer, sabrinacarpenterdisc ve, sabrinacarpenterdisc debating"
+      },
+      {
+        "topic_index": 10,
+        "topic_label": "Content Moderation, Reddit Removal, Rule Enforcement",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, got removed"
+      },
+      {
+        "topic_index": 12,
+        "topic_label": "Romantic Affection, Visual Affection, Multilingual Expression",
+        "ctfidf_keywords": "mult inimioar\u0103, iubesc mult, lumina inimele, enorm sabrina, inimele enorm"
+      },
+      {
+        "topic_index": 13,
+        "topic_label": "Content Removal, Rule Enforcement, Platform Governance",
+        "ctfidf_keywords": "post removed, removed post, rule post, removed rule, removed"
+      },
+      {
+        "topic_index": 25,
+        "topic_label": "Moderation, Humor, Celebrity",
+        "ctfidf_keywords": "banned answering, day banned, banned, answering sabrina, sub joke"
+      },
+      {
+        "topic_index": 26,
+        "topic_label": "Subreddit Creation, Moderation, Online Communities",
+        "ctfidf_keywords": "sub reddit, reddit created, mods don, separate sub, sabrinacarpenterdisc"
+      }
+    ],
+    "2": [
+      {
+        "topic_index": 2,
+        "topic_label": "Online Communities, Referral Networks, Social Media",
+        "ctfidf_keywords": "refer sabrinacarpenterdisc, sabrinacarpenterdisc, sabrinacarpenterdisc refer, sabrinacarpenterdisc try, sabrinacarpenterdisc sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 8,
+        "topic_label": "Referral, Deletion Request, Online Community",
+        "ctfidf_keywords": "refer sabrinacarpenterdisc, sabrinacarpenterdisc, sabrinacarpenterdisc refer, sabrina stuff, remove sabrina"
+      },
+      {
+        "topic_index": 11,
+        "topic_label": "Content Removal, Moderation, Rule Enforcement",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, moderators post"
+      },
+      {
+        "topic_index": 14,
+        "topic_label": "Content Removal, Moderation, Rule Enforcement",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, moderators post"
+      },
+      {
+        "topic_index": 15,
+        "topic_label": "Content Moderation, Rule Enforcement, Community Support",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 16,
+        "topic_label": "Content Removal, Moderation, Community Support",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 17,
+        "topic_label": "Content Removal, Moderation, Rule Enforcement",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 18,
+        "topic_label": "Content Removal, Moderation, Rule Enforcement",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 19,
+        "topic_label": "Content Removal, Moderation, Rule Enforcement",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 20,
+        "topic_label": "Content Moderation, Rule Enforcement, Community Support",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 21,
+        "topic_label": "Content Moderation, Rule Enforcement, Community Support",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 22,
+        "topic_label": "Content Moderation, Rule Enforcement, Community Support",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 23,
+        "topic_label": "Content Moderation, Rule Enforcement, Community Support",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      },
+      {
+        "topic_index": 24,
+        "topic_label": "Content Moderation, Rule Enforcement, Community Support",
+        "ctfidf_keywords": "post removed, submission removed, removed, removed rule, sabrinacarpenterdisc"
+      }
+    ]
+  }
+}

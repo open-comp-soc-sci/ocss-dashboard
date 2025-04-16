@@ -8,7 +8,8 @@ import os
 import json
 import pika
 from . import clickHouse_BP
-from ..rpc_client import TopicModelRpcClient  # Import the RPC client module
+from ..rpc_client import TopicModelRpcClient  # Import the RPC client modules
+from ..rpc_client import SentimentAnalysisRpcClient 
 
 import csv
 import io
@@ -45,122 +46,23 @@ def get_pooled_client():
 
 
 def release_client(client):
-    connection_pool.put(client)
-
-
-@clickHouse_BP.route("/api/get_all_click", methods=["GET"])
-def get_all_click():
-    try:
-        length = request.args.get('length', default=9999999999999, type=int)
-        start = request.args.get('start', default=0, type=int)
-        draw = request.args.get('draw', default=1, type=int)
-        option = request.args.get('option', default='reddit_submissions')
-        subreddit = request.args.get('subreddit', '', type=str)
-        subreddit = subreddit.lower()
-        client = get_pooled_client()
-        search_value = request.args.get('search[value]', '', type=str)
-        sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
-        # Get datetime range from the query parameters (ISO strings)
-        start_date = request.args.get('startDate', None, type=str)
-        end_date = request.args.get('endDate', None, type=str)
-
-
-        # Build the base query based on the option.
-        if option == "reddit_submissions":
-            base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
-        elif option == "reddit_comments":
-            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
-        else:
-            return jsonify({"error": "Invalid option provided."}), 400
-
-
-        # Build the conditions.
-        conditions = []
-        if subreddit:
-            conditions.append(f"subreddit = '{subreddit}'")
-        if search_value:
-            if option == "reddit_submissions":
-                conditions.append(f"(subreddit LIKE '%{search_value}%' OR title LIKE '%{search_value}%' OR selftext LIKE '%{search_value}%')")
-            else:
-                conditions.append(f"(subreddit LIKE '%{search_value}%' OR body LIKE '%{search_value}%')")
-        if sentiment_keywords:
-            if option == "reddit_submissions":
-                conditions.append(f"(title LIKE '%{sentiment_keywords}%' OR selftext LIKE '%{sentiment_keywords}%')")
-            else:
-                conditions.append(f"(body LIKE '%{sentiment_keywords}%')")
-        # Reformat and add date conditions if provided.
-        if start_date:
-            start_date_formatted = start_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
-        if end_date:
-            end_date_formatted = end_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
-
-
-        query = base_query
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY created_utc DESC"
-        query += f" LIMIT {length} OFFSET {start}"
-
-
-        print("Executing query:", query, flush=True)
-
-
-        start_time = time.time()
-        result = client.query(query)
-        query_time = time.time() - start_time
-        print(f"first query execution time: {query_time:.4f} seconds", flush=True)
-        print(f"yippee", flush=True)
-        
-        start_time = time.time()
-        data = result.result_rows
-        totttall = time.time() - start_time
-        print(f"WOWWWw", flush=True)
-        print(f"Data processing timeeee: {totttall:.4f} seconds", flush=True)
-
-
-        # Build the count query.
-        if option == "reddit_submissions":
-            count_query = "SELECT COUNT(*) FROM reddit_submissions"
-        else:
-            count_query = "SELECT COUNT(*) FROM reddit_comments"
-        if conditions:
-            count_query += " WHERE " + " AND ".join(conditions)
-        start_time = time.time()
-        total_result = client.query(count_query)
-        count_query_time = time.time() - start_time
-        print(f"Count query execution time: {count_query_time:.4f} seconds", flush=True)
-        
-        total_records = total_result.result_rows[0][0]
-
-        print(f"what am i doing im returning jsonify!!!", flush=True)
-
-        return jsonify({
-            "draw": draw,
-            "recordsTotal": total_records,
-            "recordsFiltered": total_records,
-            "data": data
-        })
-
-
-    except Exception as e:
-        print(e, flush=True)
-        return jsonify({"error": str(e)}), 500
-    finally:
-        release_client(client)
-
+    if client:
+        connection_pool.put(client)
 
 @clickHouse_BP.route("/api/get_arrow", methods=["GET"])
 def get_arrow():
+    client = None
     try:
         # Retrieve query parameters.
         subreddit = request.args.get('subreddit', '')
-        subreddit = subreddit.lower()
+        # subreddit = subreddit.lower()
         start_date = request.args.get('startDate', None)
         end_date = request.args.get('endDate', None)
         option = request.args.get('option', 'reddit_comments')  # Default to comments if not specified
         search_value = request.args.get('search_value', '', type=str)
+
+        if not option or option.strip() == '':
+            return jsonify({"error": "Data option was not selected."}), 400
 
         if ',' in option:
             # If both options are selected, use a UNION ALL query.
@@ -168,15 +70,13 @@ def get_arrow():
                 "SELECT * FROM ("
                 "    (SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions) "
                 "    UNION ALL "
-                "    (SELECT subreddit, author, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
+                "    (SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
                 ") AS combined"
             )
         elif option == "reddit_submissions":
             base_query = "SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions"
         elif option == "reddit_comments":
-            base_query = "SELECT subreddit, author, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
-
-
+            base_query = "SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
         
         conditions = []
         if subreddit:
@@ -200,12 +100,19 @@ def get_arrow():
         query += " LIMIT 9999999999999 OFFSET 0"
         
         client = get_pooled_client()
+        if client is None:
+            return jsonify({"error": "Failed to get ClickHouse client."}), 500
+
         
         # Use query_arrow to get an Arrow Table directly.
         start_time = time.time()
         table = client.query_arrow(query, use_strings=True)
         query_arrow_time = time.time() - start_time
         print(f"Query Arrow time: {query_arrow_time:.4f} seconds", flush=True)
+
+        # Error out if subreddit does not exist or has no matching data
+        if table.num_rows == 0:
+            return jsonify({"error": f"Subreddit 'r/{subreddit}' does not exist or contains no data in our database."}), 404
         
         # Serialize the Arrow Table into a binary stream.
         start_time = time.time()
@@ -235,33 +142,33 @@ def get_arrow():
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
-    try:
-        # Retrieve parameters from the POST body.
-        request_data = request.get_json() or {}
-        parameters = {
-            "data_source": request_data.get("data_source", "api"),
-            "subreddit": request_data.get("subreddit", ""),
-            "option": request_data.get("option", "reddit_submissions"),
-            "startDate": request_data.get("startDate", ""),   # Passed as ISO string
-            "endDate": request_data.get("endDate", "")          # Passed as ISO string
-            # Add any additional parameters as needed.
-        }
-        parameters['subreddit'] = parameters['subreddit'].lower()
-        message = json.dumps(parameters)
-        rpc_client = TopicModelRpcClient()
-        result = rpc_client.call(message)
-        return jsonify({"result": json.loads(result)}), 200
+
+    # Retrieve parameters from the POST body.
+    request_data = request.get_json() or {}
+    parameters = {
+        "data_source": request_data.get("data_source", "api"),
+        "subreddit": request_data.get("subreddit", ""),
+        "option": request_data.get("option", "reddit_submissions"),
+        "startDate": request_data.get("startDate", ""),   # Passed as ISO string
+        "endDate": request_data.get("endDate", "")          # Passed as ISO string
+        # Add any additional parameters as needed.
+    }
+    # parameters['subreddit'] = parameters['subreddit'].lower()
+    message = json.dumps(parameters)
+    topic_rpc_client = TopicModelRpcClient()
+    result = topic_rpc_client.call(message)
+    sentiment_rpc_client = SentimentAnalysisRpcClient()
+    result = sentiment_rpc_client.call(result)
+    return jsonify({"result": json.loads(result)}), 200
 
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
 def export_data():
     try:
         option = request.args.get('option', default='reddit_submissions')
         subreddit = request.args.get('subreddit', '', type=str)
-        subreddit = subreddit.lower()
+        # subreddit = subreddit.lower()
         # Read our search parameter from a simpler key.
         search_value = request.args.get('search_value', '', type=str)
         sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
@@ -276,13 +183,13 @@ def export_data():
                 "SELECT * FROM ("
                 "    (SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions) "
                 "    UNION ALL "
-                "    (SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
+                "    (SELECT subreddit, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
                 ") AS combined"
             )
         elif option == "reddit_submissions":
             base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
         elif option == "reddit_comments":
-            base_query = "SELECT subreddit, '' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
+            base_query = "SELECT subreddit, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
 
         else:
             return jsonify({"error": "Invalid option provided."}), 400
