@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import TopicTable from './TopicTable'; // Adjust the import path if necessary
 
-const TopicTablesContainer = ({ groups }) => {
+const TopicTablesContainer = ({ groups, handleSaveResults }) => {
   const [showPosts, setShowPosts] = useState(false);
 
   const togglePosts = () => {

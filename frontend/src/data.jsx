@@ -266,6 +266,29 @@ function Data() {
     }
   };
 
+// Amplification factor for sentiment scores.
+// Adjust this value based on the typical magnitude of your scores.
+const amplifyFactor = 5;
+
+const getBarColor = (score) => {
+  // Amplify the score.
+  const amplified = score * amplifyFactor;
+  // Clamp the amplified score between -1 and 1.
+  const clamped = Math.max(-1, Math.min(1, amplified));
+  // Map the clamped score to a hue value between 0 (red) and 120 (green).
+  // If clamped == -1, hue = 0 (red)
+  // If clamped == 0, hue = 60 (yellow)
+  // If clamped == 1, hue = 120 (green)
+  const hue = ((clamped + 1) / 2) * 120;
+  // Adjust saturation and lightness as desired. Here we choose 70% saturation and 50% lightness.
+  return {
+    background: `hsla(${hue}, 70%, 50%, 0.5)`,
+    border: `hsl(${hue}, 70%, 50%)`
+  };
+};
+
+
+
   // Initialize search history DataTable when searchData changes.
   useEffect(() => {
     //console.log(searchData);
@@ -739,8 +762,8 @@ function Data() {
     });
   }, []);
 
-  const runSentimentAnalysis = async () => {
-    // Combine the current checkbox values on the fly.
+  const runTopicClustering = async () => {
+    // Recalculate the combined option on the fly based on current checkbox values.
     let combinedOption = "";
     if (includeSubmissions && includeComments) {
       combinedOption = "reddit_submissions,reddit_comments";
@@ -749,30 +772,28 @@ function Data() {
     } else if (includeComments) {
       combinedOption = "reddit_comments";
     } else {
-      // You could default to one or show an error if neither is selected.
       combinedOption = "";
     }
-
-    // Clear previous results.
+  
+    // Clear previous results to show fresh results.
     setClusteringResults(null);
-    setLoadingSentiment(true);
+    setLoadingSentiment(true);  // You might consider renaming this to reflect topic clustering loading.
     setError(null);
-
+  
     try {
-      const response = await fetch("/api/run_sentiment", {
+      const response = await fetch("/api/run_topic", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subreddit,
-          option: combinedOption, // or option: option,
+          option: combinedOption,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         })
       });
-      if (!response.ok) throw new Error("Sentiment analysis failed.");
+      if (!response.ok) throw new Error("Topic clustering failed.");
       const resultData = await response.json();
-      console.log("Result Data:", resultData.result);
-      // Set the state to the inner result object.
+      console.log("Topic Clustering Result:", resultData.result);
       setClusteringResults(resultData.result);
     } catch (err) {
       setError(err.message);
@@ -780,6 +801,34 @@ function Data() {
       setLoadingSentiment(false);
     }
   };
+  
+
+  const runSentimentAnalysis = async () => {
+    setLoadingSentiment(true);
+    setError(null);
+    
+    try {
+      const response = await fetch("/api/run_sentiment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Pass the topic clustering result to the sentiment endpoint
+        body: JSON.stringify({
+          topic_result: clusteringResults
+        })
+      });
+      if (!response.ok) throw new Error("Sentiment analysis failed.");
+      const resultData = await response.json();
+      console.log("Sentiment Analysis Result:", resultData.result);
+      // Update state with the new sentiment analysis result if needed
+      setClusteringResults(resultData.result);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingSentiment(false);
+    }
+  };
+  
+  
 
   useEffect(() => {
     if (clusteringResults) {
@@ -875,45 +924,46 @@ function Data() {
   };
 
   let dynamicChartData, dynamicChartOptions;
-  if (clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0) {
-    const dynamicLabels = clusteringResults.result.groups.map(group => group.llmLabel);
-    const dynamicData = clusteringResults.result.groups.map(group => group.postCount);
-    const dynamicBackgroundColors = dynamicLabels.map((_, index) => getBackgroundColor(index));
-    const dynamicBorderColors = dynamicLabels.map((_, index) => getBorderColor(index));
 
+  if (clusteringResults && clusteringResults.sentiment && Array.isArray(clusteringResults.sentiment)) {
+    const sentimentArray = clusteringResults.sentiment;
+    const dynamicLabels = sentimentArray.map(result => `Topic ${result.topic}`);
+    const dynamicData = sentimentArray.map(result => result.score);
+      // Use the getBarColor function to compute colors based on the amplified score.
+  const dynamicBackgroundColors = sentimentArray.map(result => getBarColor(result.score).background);
+  const dynamicBorderColors = sentimentArray.map(result => getBarColor(result.score).border);
+
+  
     dynamicChartData = {
       labels: dynamicLabels,
       datasets: [{
-        label: 'Sentiment Rating',
+        label: 'Sentiment Score',
         data: dynamicData,
         backgroundColor: dynamicBackgroundColors,
         borderColor: dynamicBorderColors,
         borderWidth: 1
       }]
     };
-
+  
     dynamicChartOptions = {
       responsive: true,
       maintainAspectRatio: false,
       scales: {
         y: {
           beginAtZero: true,
-          title: { display: true, text: 'Sentiment Rating' },
+          title: { display: true, text: 'Sentiment Score' }
         },
         x: {
-          title: { display: true, text: 'Topic Clusters' },
-        },
+          title: { display: true, text: 'Topic' }
+        }
       },
       plugins: {
-        title: {
-          display: true,
-          text: 'Topic Cluster Sentiment Analysis',
-        },
-        legend: { position: 'bottom' },
-      },
+        title: { display: true, text: 'Topic Sentiment Analysis' },
+        legend: { position: 'bottom' }
+      }
     };
   }
-
+  
   return (
     <div className="container mt-5">
       {/* Page Header */}
@@ -1067,21 +1117,37 @@ function Data() {
               padding: '1rem'
             }}
           >
-            {clusteringResults && clusteringResults.result && clusteringResults.result.groups && clusteringResults.result.groups.length > 0 ? (
+            {clusteringResults && clusteringResults.sentiment && Array.isArray(clusteringResults.sentiment) ? (
               <Bar data={dynamicChartData} options={dynamicChartOptions} />
             ) : (
               <Bar data={staticChartData} options={staticChartOptions} />
-            )}          </div>
+            )}
+          </div>
+
+
+
           <button className="btn btn-secondary">Save as PNG</button>
 
           <div className="mt-4">
-            <button
-              className="btn btn-success"
-              onClick={runSentimentAnalysis}
-              disabled={error && error.includes("does not exist")}
-            >
-              {loadingSentiment ? 'Analyzing...' : 'Run Topic Clustering'}
-            </button>
+            {/* If clusteringResults is not yet available, show the topic clustering button */}
+            {!clusteringResults ? (
+              <button
+                className="btn btn-success"
+                onClick={runTopicClustering}
+                disabled={loadingSentiment}
+              >
+                {loadingSentiment ? 'Analyzing Topics...' : 'Run Topic Clustering'}
+              </button>
+            ) : (
+              // Once clusteringResults is set, show the sentiment analysis button.
+              <button
+                className="btn btn-purple"  // make sure to define this class in your CSS
+                onClick={runSentimentAnalysis}
+                disabled={loadingSentiment}
+              >
+                {loadingSentiment ? 'Analyzing Sentiment...' : 'Start Sentiment Analysis'}
+              </button>
+            )}
           </div>
 
           <ToastContainer />
@@ -1098,17 +1164,23 @@ function Data() {
         </button>
       </div>
 
-      {clusteringResults &&
-        clusteringResults.result &&
-        clusteringResults.result.groups && (
-          <div className="row mt-4">
-            <div className="col-md-12">
-              <h2>Topic Clustering Results</h2>
-              <TopicTablesContainer groups={clusteringResults.result.groups} />
-            </div>
+      {/* {clusteringResults && (
+  <pre>{JSON.stringify(clusteringResults, null, 2)}</pre>
+)} */}
+
+      {clusteringResults && clusteringResults.groups && (
+        <div className="row mt-4">
+          <div className="col-md-12">
+            <h2>Topic Clustering Results</h2>
+            <TopicTablesContainer
+        groups={clusteringResults.groups} 
+        handleSaveResults={handleSaveResults}
+      />
+
           </div>
-        )
-      }
+        </div>
+      )}
+
 
 
       {/* Main Results DataTable */}

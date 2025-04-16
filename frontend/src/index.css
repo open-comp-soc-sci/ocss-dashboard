@@ -19,3 +19,20 @@ div.dt-length > select#dt-length-2 {
   height: 0 !important;
   overflow: hidden !important;
 }
+
+.btn-purple {
+  background-color: rebeccapurple;
+  color: white;
+  border: none;
+}
+
+.btn-purple:hover {
+  background-color: indigo;
+}
+
+.btn-purple:disabled {
+  background-color: rebeccapurple !important;
+  opacity: 0.7; /* Adjust opacity for a duller look if you prefer */
+  color: white !important;
+  border-color: rebeccapurple !important;
+}
