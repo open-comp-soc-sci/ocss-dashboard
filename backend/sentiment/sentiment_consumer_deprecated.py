@@ -18,7 +18,7 @@ class ClusterPrintingTest:
         # Set up the callback for receiving messages
         channel.basic_consume(queue="grouping_results", on_message_callback=self.receive_groups)
 
-        print(" [*] Waiting for cluster messages. To exit, press CTRL+C")
+        print(" [*] Waiting for cluster messages. To exit, press CTRL+C", flush=True)
         channel.start_consuming()
 
         connection.close()
@@ -26,46 +26,46 @@ class ClusterPrintingTest:
     def receive_groups(self, ch, method, properties, body):
         try:
             if not body or body.strip() == b'':
-                print("Received an empty message.")
+                print("Received an empty message.", flush=True)
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 return
 
-            print(f"\nRaw message body: {body!r}")
+            print(f"\nRaw message body: {body!r}", flush=True)
 
             decoded_str = body.decode('utf-8')
-            print(f"Decoded string: {decoded_str[:500]}...")  # Print first 500 chars only if it's big
-            sys.stdout.flush()
+            print(f"Decoded string: {decoded_str[:500]}...", flush=True)  # Print first 500 chars only if it's big
+
 
             decoded_json = json.loads(decoded_str)
-            print("Successfully parsed JSON.")
-            sys.stdout.flush()
+            print("Successfully parsed JSON.", flush=True)
+
 
 
             with open("grouping_results.json", "w") as f:
-                print(f"Wrote to: {os.path.abspath('grouping_results.json')}")
-                sys.stdout.flush()
-                print("Writing to file...")
-                sys.stdout.flush()
+                print(f"Wrote to: {os.path.abspath('grouping_results.json')}", flush=True)
+    
+                print("Writing to file...", flush=True)
+    
                 json.dump(decoded_json, f, indent=2)
-                print("Done writing.")
-                sys.stdout.flush()
+                print("Done writing.", flush=True)
+    
 
-            print("Running readReddit.py...")
-            sys.stdout.flush()
+            print("Running readReddit.py...", flush=True)
+
 
             subprocess.run(["python", "readReddit.py"], check=True)
 
-            print("Finished running readReddit.py")
-            sys.stdout.flush()
+            print("Finished running readReddit.py", flush=True)
+
 
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
         except json.JSONDecodeError as e:
-            print(f"JSON decoding error: {e}")
+            print(f"JSON decoding error: {e}", flush=True)
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
         except Exception as e:
-            print(f"Other error: {e}")
+            print(f"Other error: {e}", flush=True)
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
