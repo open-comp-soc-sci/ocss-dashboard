@@ -96,9 +96,22 @@ def saveResult():
                 email=data["email"],
                 result_id=new_result.id,
                 group_number=group['group'],
-                topic_label=group['topic_label'],
-                topics=group['topics'],
-                post_count=group['post_count']
+                topic_label=group['llmLabel'],
+                topics=[
+                    {
+                        "topicNumber": topic['topicNumber'],
+                        "ctfidfKeywords": topic['ctfidfKeywords'],
+                        "postCount": topic['postCount']
+                    }
+                    for topic in group['topics']
+                ],
+                example_posts=[
+                    {
+                        "topicNumber": topic['topicNumber'],
+                        "samplePost": topic['samplePosts']
+                    }
+                for topic in group['topics']
+                ]
             )
             db.session.add(topicCluster)
         db.session.commit()
@@ -120,16 +133,24 @@ def getResult():
             resultGroups = (
                 TopicData.query
                 .filter_by(result_id=result.id)
-                .order_by(TopicData.post_count.desc())
-                .limit(3)
                 .all()
             )
 
-            resultLabels = [group.topic_label for group in resultGroups]
-            resultCounts = [group.post_count for group in resultGroups]
-            # Some topic clusters may have less than three groups
-            while len(resultLabels) < 3:
-                resultLabels.append("N/A")
+            topics_info = []
+            for group in resultGroups:
+                for topic in group.topics:  # Iterate through each topic in the 'topics' JSON
+                    topic_info = {
+                        "topicNumber": topic.get("topicNumber"),
+                        "topicLabel": topic.get("ctfidfKeywords"),
+                        "postCount": topic.get("postCount"),
+                    }
+                    topics_info.append(topic_info)
+
+            sorted_topics = sorted(topics_info, key=lambda x: x["postCount"], reverse=True)
+            top_3_topics = sorted_topics[:3]
+
+            resultLabels = [top_3_topics[i]["topicLabel"] if i < len(top_3_topics) else "N/A" for i in range(3)]
+            resultCounts = [top_3_topics[i]["postCount"] if i < len(top_3_topics) else 0 for i in range(3)]
 
             results_data.append({
                 "id": result.id,
@@ -161,13 +182,16 @@ def getTopics(result_id):
 
         resultTopics = []
         for topic in topics:
-            resultTopics.append({
-                "id": topic.id,
-                "group_number": topic.group_number,
-                "topic_label": topic.topic_label,
-                "topics": topic.topics,
-                "post_count": topic.post_count
-            })
+           for topic_item in topic.topics:
+                resultTopics.append({
+                    "id": topic.id,
+                    "group_number": topic.group_number,
+                    "topic_number": topic_item.get("topicNumber"),
+                    "group_label": topic.group_label,
+                    "topic_label": topic_item.get("ctfidfKeywords"),
+                    "post_count": topic_item.get("postCount"),
+                    "example_posts": topic.example_posts
+                })
 
         return jsonify({"topics": resultTopics}), 200
 
