@@ -12,6 +12,7 @@ const Results = () => {
             try {
                 const response = await fetch("/api/get_result");
                 const data = await response.json();
+                //console.log(data)
                 setResults(data.results);
                 setError(null);
             } catch (err) {
@@ -54,6 +55,8 @@ const Results = () => {
         try {
             const response = await fetch(`/api/get_topics/${resultId}`);
             const data = await response.json();
+            console.log(data.topics);
+
             if (data.error) {
                 setError("Error fetching Topic Clustering data for this result.");
             } else {
@@ -95,9 +98,9 @@ const Results = () => {
                                         </p>
 
                                         <h5 className="card-title mt-3">Popular Topics</h5>
-                                        <p className="card-text mb-0">Topic 1: {resultCard.topic1 || "N/A"}</p>
-                                        <p className="card-text mb-0">Topic 2: {resultCard.topic2 || "N/A"}</p>
-                                        <p className="card-text mb-0">Topic 3: {resultCard.topic3 || "N/A"}</p>
+                                        <p className="card-text mb-0"><span className="text-decoration-underline">Topic 1 ({resultCard.topic1Count}):</span> {resultCard.topic1 || "N/A"}</p>
+                                        <p className="card-text mb-0"><span className="text-decoration-underline">Topic 2 ({resultCard.topic2Count}):</span> {resultCard.topic2 || "N/A"}</p>
+                                        <p className="card-text mb-0"><span className="text-decoration-underline">Topic 3 ({resultCard.topic3Count}):</span> {resultCard.topic3 || "N/A"}</p>
 
                                         <button
                                             type="button"
@@ -119,38 +122,44 @@ const Results = () => {
                                             <div className="modal-dialog modal-lg">
                                                 <div className="modal-content">
                                                     <div className="modal-header">
-                                                        <h5 className="modal-title" id="showTopics">Three Column Modal</h5>
+                                                        <h5 className="modal-title" id="showTopics">Topic Clustering Information</h5>
                                                         <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                     </div>
                                                     <div className="modal-body">
-                                                        <h1>Testing, Will Place Topic Clustering Here</h1>
+                                                        <h1>(Testing) See if example posts can be added as well.</h1>
                                                         {error && <p className="text-danger">{error}</p>}
 
-                                                        {!error && topics.length === 0 && (
+                                                        {!error && topicsCard.length === 0 && (
                                                             <p>No topic data available for this result.</p>
                                                         )}
 
                                                         {!error && topicsCard.length > 0 && (
                                                             <div className="row">
-                                                                {topicsCard.map((topic) => (
-                                                                    <div key={topic.id} className="col-md-4 mb-3">
-                                                                        <div className="card h-100">
-                                                                            <div className="card-body">
-                                                                                <h6 className="card-title">
-                                                                                    Group {topic.group_number}: {topic.topic_label}
-                                                                                </h6>
-                                                                                <p className="card-text">
-                                                                                    Posts: {topic.post_count}
-                                                                                </p>
-                                                                                <ul className="small">
-                                                                                    {Object.values(topic.topicsCard).map((word, index) => (
-                                                                                        <li key={index}>{word}</li>
-                                                                                    ))}
-                                                                                </ul>
+                                                                {[...topicsCard]
+                                                                    .sort((a, b) => {
+                                                                        if (a.group_number !== b.group_number) {
+                                                                            return a.group_number - b.group_number;
+                                                                        }
+                                                                        return a.id - b.id;
+                                                                    }).map((topic) => (
+                                                                        <div key={topic.id} className="col-md-4 mb-3">
+                                                                            <div className="card h-100">
+                                                                                <div className="card-body">
+                                                                                    <h6 className="card-title">
+                                                                                        Group {topic.group_number}: {topic.topic_label}
+                                                                                    </h6>
+                                                                                    <p className="card-text">
+                                                                                        Posts: {topic.post_count}
+                                                                                    </p>
+                                                                                    <ul className="small">
+                                                                                        {topic.topics && topic.topics.map((word, index) => (
+                                                                                            <li key={index}>{word}</li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
-                                                                    </div>
-                                                                ))}
+                                                                    ))}
                                                             </div>
                                                         )}
                                                     </div>
