@@ -59,7 +59,7 @@ def callback(ch, method, properties, body):
 
     try:
         result_message = run_topic_model(config_copy["data_source"], output_dir, config_copy)
-        print("Topic modeling complete:", result_message)
+        # print("Topic modeling complete:", result_message)
 
         # Publish the reply to the callback queue specified in properties.reply_to
         response_body = json.dumps({"result": result_message})

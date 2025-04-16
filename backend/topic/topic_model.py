@@ -9,6 +9,9 @@ import os
 import re
 import argparse
 import pickle
+import time
+import pyarrow as pa
+import io
 from tqdm import tqdm
 
 from bertopic import BERTopic
@@ -120,15 +123,21 @@ class TopicModeling():
             # Build the API URL and append date parameters if provided.
             print('fetching from clickhouse')
 
-            api_url = f"http://sunshine.cise.ufl.edu:5000/api/get_all_click?subreddit={subreddit}&option={option}"
+            api_url = f"https://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
             if start_date:
                 api_url += f"&startDate={start_date}"
             if end_date:
                 api_url += f"&endDate={end_date}"
             try:
-                response = requests.get(api_url)
+                response = requests.get(api_url, verify=False)
                 response.raise_for_status()
-                data = response.json()
+                # Read the binary Arrow stream.
+                buffer = io.BytesIO(response.content)
+                reader = pa.ipc.open_stream(buffer)
+                table = reader.read_all()
+
+                # Optionally, convert the Arrow Table to a pandas DataFrame if needed.
+                df = table.to_pandas()
                 # Print the first 5 records from the "data" key.
                 # print(data["data"][0:5])
                 # Iterate over the actual records list.
@@ -142,31 +151,50 @@ class TopicModeling():
             
             # Convert the JSON data into a DataFrame based on the option.
             # For submissions:
-            if option == "reddit_submissions":
-                # print('whats this')
-                # print(data["data"][0:400])
-                df = pd.DataFrame(data["data"], columns=["subreddit", "title", "selftext", "created_utc", "id"])
-                df = df.rename(columns={"selftext": "body"})
-            elif option == "reddit_comments":
-                # print('whats this')
-                # print(data["data"][0:400])
-                df = pd.DataFrame(data["data"], columns=["subreddit", "title", "body", "created_utc", "id"])
-                # df = pd.DataFrame(data["data"], columns=["id", "parent_id", "subreddit", "body", "created_utc"])
+            # if option == "reddit_submissions":
+            #     # print('whats this')
+            #     # print(data["data"][0:400])
+            #     # df = pd.DataFrame(data["data"], columns=["subreddit", "title", "selftext", "created_utc", "id"])
+                
+            # elif option == "reddit_comments":
+            #     # print('whats this')
+            #     # print(data["data"][0:400])
+            #     # df = pd.DataFrame(data["data"], columns=["subreddit", "title", "body", "created_utc", "id"])
+            #     pass
 
-            else:
-                raise ValueError(f"Invalid option provided: {option}")
+            df = df.rename(columns={"selftext": "body"})
+
+            # else:
+            #     raise ValueError(f"Invalid option provided: {option}")
 
             print('this many rows:')
             print(len(df))
+                    # Print the first row where 'title' has content
+            title_not_empty = df[df['title'].notna() & (df['title'] != '')].head(1)
+            if not title_not_empty.empty:
+                print("First row where title is not empty:")
+                print(title_not_empty.to_string())
+            else:
+                print("No rows found where title is not empty")
+                
+            # Print the first row where 'title' is empty
+            title_empty = df[(df['title'].isna()) | (df['title'] == '')].head(1)
+            if not title_empty.empty:
+                print("First row where title is empty:")
+                print(title_empty.to_string())
+            else:
+                print("No rows found where title is empty")
+                
+            
 
 
             # print('!')
-            # print(df.head().to_string())
+            print(df.head().to_string()[:2000])
             # print(":__)")
             self.df = self.preprocess_dataframe(df)
             self.texts = self.df['body'].tolist()
 
-            # print(self.df.to_string())
+            print(self.df.to_string()[:2000])
             # print(len(self.df))
             # print("************")
 
@@ -229,6 +257,27 @@ class TopicModeling():
                                     representation_model=representation_model,
                                     verbose=True)
         self.topics, _ = self.topic_model.fit_transform(self.texts, self.embeddings)
+
+        # #
+        # # Compute the total number of posts and the noise threshold (0.5% of total posts)
+        # total_posts = len(self.topics)
+        # threshold = total_posts * 0.005
+
+        # topics_array = np.array(self.topics)
+        # # Only consider topics that are not already marked as noise (-1)
+        # unique_topics = np.unique(topics_array[topics_array != -1])
+
+        # # Create a dictionary to hold topic frequencies.
+        # topic_counts = {topic: np.sum(topics_array == topic) for topic in unique_topics}
+
+        # # Reassign topics that do not meet the threshold as noise (-1)
+        # filtered_topics = [
+        #     topic if topic == -1 or topic_counts.get(topic, 0) >= threshold else -1 
+        #     for topic in topics_array
+        # ]
+
+        # self.topics = filtered_topics
+
         if not os.path.exists(self.config['save_dir']):
             os.makedirs(self.config['save_dir'])
         # self.topic_model.save(f'{self.config["save_dir"]}/topic_model.pickle', save_ctfidf=True)
@@ -292,7 +341,8 @@ class TopicModeling():
 
 
     def label_groups(self):
-        self.group_labeler = GroupLabeling(self.topics, self.topic_labeler.topic_labels, self.groups, self.topic_model)
+        self.group_labeler = GroupLabeling(self.df, self.topics, self.topic_labeler.topic_labels, self.groups, self.topic_model, self.topic_labeler)
+
 
 
     def find_ideal_num_groups(self, llim=2, ulim=40):
@@ -463,7 +513,8 @@ class TopicModeling():
             body=message,
             properties=pika.BasicProperties(delivery_mode=2)
         )
-        print(f" [x] Sent {message}")
+        # print(f" [x] Sent {message}")
+        print('done...')
         connection.close()
 
 
@@ -476,8 +527,13 @@ class TopicLabeling():
         self.topic_model = topic_model
         self.config = config
 
-        self.llm = Ollama(model="gemma2:27b", base_url=f"http://ollama_container:11434")
+        self.llm = Ollama(model="gemma3:27b", base_url=f"http://ollama_container:11434")
 
+            
+        # Here we are computing one representative document per topic.
+        self.rep_docs = self.find_representative_docs_per_topic(df, topics, embeddings, n_reps=1)
+
+        # Continue with the rest of the initialization and LLM prompting.
         self.topic_representations = self.find_topic_representations()
 
     
@@ -487,44 +543,111 @@ class TopicLabeling():
         embeddings = self.embeddings
         topic_model = self.topic_model
 
-        # 1) representative & random docs
-        rep_docs = self.find_representative_docs_per_topic(df, topics, embeddings, n_reps)
+        # Use the stored representative docs for LLM prompting.
+        # If you need multiple representative documents (rep_docs) for the LLM prompt,
+        # adjust self.rep_docs computation accordingly.
+        rep_docs = self.rep_docs
         rand_docs = self.find_random_docs_per_topic(df, topics, n_reps)
-        prompt_docs = [i[:5] + j[:5] for i, j in zip(rep_docs, rand_docs)]
+        prompt_docs = [rep_docs[i][:5] + rand_docs[i][:5] for i in range(len(rep_docs))]
 
         representations = {}  # This will hold {topic_index -> list_of_labels}
         
-        for topic in tqdm(range(np.max(topics) + 1)):
-            # 2) Build the prompt
+        total_time = 0
+        total_topics = np.max(topics) + 1
+        print(f"Starting LLM predictions for {total_topics} topics...")
+        
+        for topic in tqdm(range(total_topics)):
             prompt_i = self.prepare_prompt(topic_model, prompt_docs, topic)
-            
-            # 3) Get raw LLM response
+            start_time = time.time()
             raw_response = self.llm.predict(prompt_i)
-            raw_response = raw_response.replace("**", "")  # remove bold markers if any
-
-            # 4) Try parsing JSON
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            total_time += elapsed_time
+            
+            print(f"Topic {topic} prediction: {elapsed_time:.2f} seconds")
+            
+            # Clean up bold markers if any.
+            raw_response = raw_response.replace("**", "")
             try:
-                labels_list = json.loads(raw_response)  # Expecting something like ["Label 1","Label 2","Label 3"]
+                labels_list = json.loads(raw_response)
             except json.JSONDecodeError:
-                # Fallback if the model doesn't return valid JSON
-                labels_list = ["Error Label 1", "Error Label 2", "Error Label 3"]
-
-            # 5) Store as a list of strings
+                # If that fails, try to extract content from JSON code blocks
+                try:
+                    json_pattern = r'```json\s*(.*?)\s*```'
+                    matches = re.search(json_pattern, raw_response, re.DOTALL)
+                    
+                    if matches:
+                        # Extract what's inside the code blocks
+                        json_content = matches.group(1).strip()
+                        labels_list = json.loads(json_content)
+                    else:
+                        # If no code blocks, check if the raw response has array bracket format
+                        array_pattern = r'\[(.*?)\]'
+                        matches = re.search(array_pattern, raw_response, re.DOTALL)
+                        
+                        if matches:
+                            # Try to parse the array content
+                            array_content = f"[{matches.group(1)}]"
+                            labels_list = json.loads(array_content)
+                        else:
+                            # Fallback: use raw response as a single label
+                            print(f"Could not parse JSON or extract array for topic {topic}: {raw_response}")
+                            labels_list = [raw_response]
+                except Exception as e:
+                    print(f"All parsing attempts failed for topic {topic}: {str(e)}")
+                    labels_list = [raw_response]
+                    
             representations[topic] = labels_list
 
-        # Save all final representations
-        self.topic_representations = representations
-        with open(f'{self.config["save_dir"]}/llama_topic_representations_i.pickle', 'wb') as fh:
-            pickle.dump(representations, fh)
 
-        # 6) Convert to a simpler string or keep them as lists
+        avg_time = total_time / total_topics
+        print(f"LLM prediction stats:")
+        print(f"Total time: {total_time:.2f} seconds")
+        print(f"Average time per topic: {avg_time:.2f} seconds")
+        print(f"Number of topics: {total_topics}")
+        
+
+        self.topic_representations = representations
+        # with open(f'{self.config["save_dir"]}/llama_topic_representations_i.pickle', 'wb') as fh:
+            # pickle.dump(representations, fh)
+
+        # Create simplified string labels.
         self.topic_labels = {}
         for topic_i, label_list in representations.items():
-            # Join them with commas or semicolons for your table if needed:
             self.topic_labels[topic_i] = ", ".join(label_list)
 
-        # Done! No need for the old 'pattern' or 'representations_extracted' logic
 
+    @staticmethod
+    def find_representative_docs_per_topic(df, topics, embeddings, n_reps=5):
+        topics = np.array(topics)
+        n_topics = topics.max() + 1
+        emb_dim = embeddings.shape[1]
+        samples_in_topics = [np.where(topics == i)[0] for i in range(n_topics)]
+        centroids = np.array([np.mean(embeddings[topic_inds, :], axis=0) for topic_inds in samples_in_topics])
+        
+        representative_samples = []
+        
+        for topic_i, (centroid_i, samples_i) in tqdm(enumerate(zip(centroids, samples_in_topics)), desc="Finding rep docs"):
+            embedded_samples_i = embeddings[samples_i, :]
+            distances = cosine_distances(embedded_samples_i, centroid_i.reshape(1, emb_dim)).flatten()
+            dist_inds = np.argsort(distances)
+            rep_docs_i = df.iloc[samples_i[dist_inds[:n_reps]]]['body'].values.tolist()
+            representative_samples.append(rep_docs_i)
+        
+        return representative_samples
+
+
+    @staticmethod
+    def find_random_docs_per_topic(df, topics, n_reps):
+        rand_docs = []
+        for topic in tqdm(range(np.max(topics) + 1), desc="Finding random docs"):
+            topic_inds = np.where(np.array(topics) == topic)[0]
+            if len(topic_inds) < n_reps:
+                samples_i = df.iloc[topic_inds]['body'].values.tolist()
+            else:
+                samples_i = df.iloc[topic_inds]['body'].sample(n=n_reps, random_state=42).values.tolist()
+            rand_docs.append(samples_i)
+        return rand_docs
 
     def prepare_topic_results_for_review(self):
         df = self.df
@@ -561,65 +684,30 @@ class TopicLabeling():
     @staticmethod
     def prepare_prompt(topic_model, rep_docs, topic_of_interest):
         """
-        Returns a prompt that explicitly instructs the LLM to output three labels 
-        in strict JSON format: ["Label 1","Label 2","Label 3"].
+        Returns a prompt for the LLM using the representative documents.
         """
         prompt = """
-    You are an AI assistant helping social scientists that returns exactly three labels in JSON array format, with no additional text or commentary.
-    For example: ["Label A","Label B","Label C"].
+You are an AI assistant helping social scientists that returns exactly three labels in JSON array format, with no additional text or commentary.
+For example: ["Label A","Label B","Label C"].
 
-    Below are topic keywords and a handful of representative documents. 
-    Please respond with ONLY a single JSON array of exactly three labels, 
-    and nothing else (no extra text, no quotes around the JSON).
+Below are topic keywords and a handful of representative documents. 
+Please respond with ONLY a single JSON array of exactly three labels, 
+and nothing else (no extra text, no quotes around the JSON).
 
-    Topic keywords:
-    {keywords}
+Topic keywords:
+{keywords}
 
-    Representative documents:
-    {docs}
+Representative documents:
+{docs}
 
-    In your label writing, consider defining acronyms that may be used, if they are used in the documents. 
-    For instance, if a keyword is "AI", consider making a label Artificial Intelligence. This helps sociologists
-    understand the topic better.
-    Now produce one JSON array of three labels, e.g.: ["Label 1","Label 2","Label 3"].
-    """.format(
+Now produce one JSON array of three labels, e.g.: ["Label 1","Label 2","Label 3"].
+""".format(
             keywords=", ".join(topic_model.get_topic_info(topic_of_interest)['Representation'][0]),
             docs="\n".join(rep_docs[topic_of_interest])
         )
-
         return prompt
 
 
-    @staticmethod
-    def find_representative_docs_per_topic(df, topics, embeddings, n_reps=5):
-        topics = np.array(topics)
-        n_topics = topics.max() + 1
-        emb_dim = embeddings.shape[1]
-        samples_in_topics = [np.where(topics == i)[0] for i in range(n_topics)]
-        centroids = np.array([np.mean(embeddings[topic_inds, :], axis=0) for topic_inds in samples_in_topics])
-        
-        representative_samples = []
-        
-        for topic_i, (centroid_i, samples_i) in tqdm(enumerate(zip(centroids, samples_in_topics))):
-            embedded_samples_i = embeddings[samples_i, :]
-            distances = cosine_distances(embedded_samples_i, centroid_i.reshape(1, emb_dim)).flatten()
-            dist_inds = np.argsort(distances)
-            rep_docs_i = df.iloc[samples_i[dist_inds[:n_reps]]]['body'].values.tolist()
-            representative_samples.append(rep_docs_i)
-        
-        return representative_samples
-
-    @staticmethod
-    def find_random_docs_per_topic(df, topics, n_reps):
-        rand_docs = []
-        for topic in tqdm(range(np.max(topics) + 1)):
-            topic_inds = np.where(np.array(topics) == topic)[0]
-            if len(topic_inds) < n_reps:
-                samples_i = df.iloc[topic_inds]['body'].values.tolist()
-            else:
-                samples_i = df.iloc[topic_inds]['body'].sample(n=n_reps, random_state=42).values.tolist()
-            rand_docs.append(samples_i)
-        return rand_docs
     
     def prepare_prompts_for_topic_labeling(self, n_reps=10):
 
@@ -647,11 +735,13 @@ class TopicLabeling():
         self.prompts = prompts
 
 class GroupLabeling():
-    def __init__(self, topics, topic_labels, groups, topic_model):
+    def __init__(self, df, topics, topic_labels, groups, topic_model, topic_labeler):
+        self.df = df
         self.topics = topics
-        self.groups = groups              # Store groups
-        self.topic_labels = topic_labels  # Store topic labels
-        self.topic_model = topic_model    # Store the topic model
+        self.groups = groups
+        self.topic_labels = topic_labels
+        self.topic_model = topic_model
+        self.topic_labeler = topic_labeler  # we now pass in the topic_labeler with stored rep_docs
         self.create_group_labels(groups, topic_labels)
         self.prepare_prompts_for_group_labeling()
         self.finalize_group_labels_with_llm()
@@ -659,14 +749,11 @@ class GroupLabeling():
 
     def create_group_labels(self, groups, topic_labels):
         group_labels_combined = {}
-
         g_min = np.min(groups)
         g_max = np.max(groups)
         for group_i in range(g_min, g_max + 1):
             group_i_inds = np.where(group_i == groups)[0]
-            group_i_label = ''
-            for group_i_ind in group_i_inds:
-                group_i_label += topic_labels[group_i_ind].replace('"', '') + '\n'
+            group_i_label = '\n'.join(topic_labels[group_i_ind].replace('"', '') for group_i_ind in group_i_inds)
             group_labels_combined[group_i] = group_i_label
 
         for group_i, group_label_combined in group_labels_combined.items():
@@ -677,28 +764,87 @@ class GroupLabeling():
     def prepare_prompts_for_group_labeling(self):
         group_prompts = {}
         for group, group_label in self.group_labels_combined.items():
-            # Create prompt for LLaMa2
-            prompt = 'You are a honest, scientific chatbot that helps me, a sociologist, create a single representative label for a group that represents a series of topics based on topic labels. Each topic label is separated by a new line character. Do not be creative or loquacious. Please present the group label in a direct manner.\n\n'
-            prompt += 'I have a group that is described by the following topic labels:\n\''
-            prompt += group_label
-            prompt += '\n\nBased on the information above, can you create the one, best, direct label for this topic in the following format?\n'
-            prompt += 'Group Label: <group_label>'
-
+            prompt = (
+                "You are a honest, scientific chatbot that helps me, a sociologist, create a single representative label for a group "
+                "that represents a series of topics based on topic labels. Each topic label is separated by a new line character. "
+                "Do not be creative or loquacious. Please present the group label in a direct manner.\n\n"
+                "I have a group that is described by the following topic labels:\n'"
+                f"{group_label}"
+                "\n\nBased on the information above, can you create the one, best, direct label for this topic in the following format?\n"
+                "Group Label: <group_label>"
+            )
             group_prompts[group] = prompt
-            
+
         self.group_prompts = group_prompts
     
+
     def finalize_group_labels_with_llm(self):
         labels = {}
-        llm = Ollama(model="gemma2:27b", base_url=f"http://ollama_container:11434", temperature=0.1)
+        llm = Ollama(model="gemma3:27b", base_url="http://ollama_container:11434", temperature=0.1)
         pattern = r"(?<=Group Label: )(.*)"
         
-        for group, prompt in tqdm(self.group_prompts.items()):
+        for group, prompt in tqdm(self.group_prompts.items(), desc="LLM group labels"):
             response = llm.predict(prompt)
-            response.replace('"', '')
-            labels[group] = re.findall(pattern, response)[0]
-            
+            cleaned_response = response.replace('"', '')
+            matches = re.findall(pattern, cleaned_response)
+            if matches:
+                labels[group] = matches[0]
+            else:
+                # Fallback: assign the entire response as the label if no match is found.
+                labels[group] = cleaned_response
         self.group_labels = labels
+
+
+    def create_topic_group_listing_json(self):
+        """
+        Returns a JSON-serializable dictionary of the grouping results.
+        For each topic, uses the representative document stored in self.topic_labeler.rep_docs.
+        """
+        grouped_results = []  # List to hold one dictionary per group
+
+        topics_array = np.array(self.topics)
+        post_counts = {
+            topic: int(np.count_nonzero(topics_array == topic))
+            for topic in np.unique(topics_array)
+        }
+
+        unique_groups = np.sort(np.unique(self.groups))
+        for group in unique_groups:
+            group_listing = {
+                "group": int(group),
+                "llmLabel": self.group_labels.get(group, "N/A"),
+                "topics": [],
+                "postCount": 0
+            }
+            topic_indices = np.where(self.groups == group)[0]
+            group_post_count = 0
+
+            for topic_index in topic_indices:
+                topic_label = self.topic_labels.get(topic_index, "N/A")
+                topic_keywords_tuples = self.topic_model.get_topic(topic_index)
+                keywords_str = ", ".join(word for word, weight in topic_keywords_tuples)
+
+                topic_post_count = post_counts.get(topic_index, 0)
+                group_post_count += topic_post_count
+
+                # Use the stored representative document from the topic_labeler
+                representative_doc = self.topic_labeler.rep_docs[topic_index][0] if self.topic_labeler.rep_docs[topic_index] else ""
+                sample_posts_str = representative_doc.strip()
+
+                topic_item = {
+                    "topicNumber": int(topic_index),
+                    "topicLabel": topic_label,
+                    "ctfidfKeywords": keywords_str,
+                    "postCount": topic_post_count,
+                    "samplePosts": sample_posts_str
+                }
+                group_listing["topics"].append(topic_item)
+            group_listing["postCount"] = group_post_count
+            grouped_results.append(group_listing)
+
+        return {"groups": grouped_results}
+
+
 
     def create_topic_group_listing(self):
         groups, topic_labels = self.groups, self.topic_labels
