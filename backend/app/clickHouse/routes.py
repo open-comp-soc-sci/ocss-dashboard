@@ -49,6 +49,44 @@ def release_client(client):
     if client:
         connection_pool.put(client)
 
+@clickHouse_BP.route('/api/search_list', methods=['GET'])
+def search_list():
+    client = None
+    try:
+        subreddit = request.args.get('subreddit', '')
+        
+        subreddit_query = f"""
+        SELECT DISTINCT subreddit FROM (
+            SELECT subreddit FROM reddit_submissions
+            UNION ALL
+            SELECT subreddit FROM reddit_comments
+        )
+        WHERE subreddit ILIKE '%{subreddit}%'
+        GROUP BY subreddit
+        ORDER BY COUNT(*) DESC
+        LIMIT 10
+        """
+
+        client = get_pooled_client()
+        if client is None:
+            return jsonify({"error": "Failed to get ClickHouse client."}), 500
+
+        result = client.query_arrow(subreddit_query)
+
+        if not result:
+            return jsonify({"message": "No subreddits found.", "subreddits": []}), 200
+
+        subreddit_list = result.column('subreddit').to_pylist()
+        print("results", subreddit_list)
+        return jsonify(subreddit_list)
+    
+    except Exception as e:
+        print(f"Error in search_list: {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
+    
+    finally:
+        release_client(client)
+
 @clickHouse_BP.route("/api/get_arrow", methods=["GET"])
 def get_arrow():
     client = None
