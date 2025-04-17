@@ -55,16 +55,17 @@ const Results = () => {
         try {
             const response = await fetch(`/api/get_topics/${resultId}`);
             const data = await response.json();
+
             console.log(data.topics);
 
             if (data.error) {
-                setError("Error fetching Topic Clustering data for this result.");
+                setError("Error fetching topic clustering data for this result.");
             } else {
                 setTopicsCard(data.topics);
                 setError(null);
             }
         } catch (err) {
-            setError("Error fetching Topic Clustering data for this result.");
+            setError("Error fetching topic clustering data for this result.");
         }
     };
 
@@ -84,7 +85,7 @@ const Results = () => {
                             {group.map((resultCard, columnIndex) => (
                                 <div className="col-md-4" key={columnIndex}>
                                     <div className="card h-100 p-3 shadow-lg">
-                                        <h5 className="card-title">Experiment</h5>
+                                        <h5 className="card-title">Experiment {resultCard.id}</h5>
                                         <p className="card-text"><span className="text-decoration-underline">User:</span> {resultCard.email}</p>
 
                                         <h5 className="card-title mt-3">Search Parameters</h5>
@@ -104,6 +105,7 @@ const Results = () => {
 
                                         <button
                                             type="button"
+                                            margin-top="auto"
                                             className="btn btn-primary mt-2"
                                             data-bs-toggle="modal"
                                             data-bs-target="#showTopics"
@@ -119,14 +121,13 @@ const Results = () => {
                                             aria-labelledby="showTopics"
                                             aria-hidden="true"
                                         >
-                                            <div className="modal-dialog modal-lg">
+                                            <div className="modal-dialog custom-modal-width">
                                                 <div className="modal-content">
                                                     <div className="modal-header">
                                                         <h5 className="modal-title" id="showTopics">Topic Clustering Information</h5>
                                                         <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                                     </div>
                                                     <div className="modal-body">
-                                                        <h1>(Testing) See if example posts can be added as well.</h1>
                                                         {error && <p className="text-danger">{error}</p>}
 
                                                         {!error && topicsCard.length === 0 && (
@@ -141,27 +142,34 @@ const Results = () => {
                                                                             return a.group_number - b.group_number;
                                                                         }
                                                                         return a.id - b.id;
-                                                                    }).map((topic) => (
-                                                                        <div key={topic.id} className="col-md-4 mb-3">
+                                                                    })
+                                                                    .map((topic) => (
+                                                                        <div key={`${topic.group_number}-${topic.topic_number}`} className="col-md-6 mb-3">
                                                                             <div className="card h-100">
                                                                                 <div className="card-body">
                                                                                     <h6 className="card-title">
-                                                                                        Group {topic.group_number}: {topic.topic_label}
+                                                                                        <strong>Group {topic.group_number}:</strong> {topic.group_label}
                                                                                     </h6>
-                                                                                    <p className="card-text">
-                                                                                        Posts: {topic.post_count}
-                                                                                    </p>
-                                                                                    <ul className="small">
-                                                                                        {topic.topics && topic.topics.map((word, index) => (
-                                                                                            <li key={index}>{word}</li>
-                                                                                        ))}
-                                                                                    </ul>
+
+                                                                                    <div>
+                                                                                        <strong>Topic {topic.topic_number}</strong>: {topic.topicLabel}
+                                                                                        <p className="mb-0"><strong>Keywords:</strong> {topic.ctfidfKeywords}</p>
+                                                                                        <p className="mb-0"><strong>Post Count:</strong> {topic.postCount}</p>
+                                                                                        {topic.example_posts && (
+                                                                                            <p className="mb-1">
+                                                                                                <strong>Sample Post:</strong>{" "}
+                                                                                                {topic.example_posts.find(p => p.topicNumber === topic.topic_number)?.samplePost || "N/A"}
+                                                                                            </p>
+                                                                                        )}
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
                                                                     ))}
                                                             </div>
-                                                        )}
+                                                        )
+                                                        }
+
                                                     </div>
                                                 </div>
                                             </div>
@@ -170,6 +178,7 @@ const Results = () => {
                                         {email === resultCard.email && (
                                             <button
                                                 className="btn btn-danger mt-3"
+                                                margin-top="auto"
                                                 onClick={() => handleRemoveResult(resultCard.id)}
                                             >
                                                 Remove Result
