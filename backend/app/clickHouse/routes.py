@@ -140,26 +140,52 @@ def get_arrow():
         release_client(client)
 
 
+@clickHouse_BP.route("/api/run_topic", methods=["POST"])
+def run_topic():
+    try:
+        # Retrieve parameters from the POST body.
+        request_data = request.get_json() or {}
+        parameters = {
+            "data_source": request_data.get("data_source", "api"),
+            "subreddit": request_data.get("subreddit", ""),
+            "option": request_data.get("option", "reddit_submissions"),
+            "startDate": request_data.get("startDate", ""),
+            "endDate": request_data.get("endDate", "")
+        }
+        message = json.dumps(parameters)
+        
+        # Instantiate the TopicModelRpcClient.
+        topic_rpc_client = TopicModelRpcClient()
+        
+        # Call the topic modeling RPC client and capture the result.
+        result = topic_rpc_client.call(message)
+        
+        # Return the topic clustering result directly to the frontend.
+        return jsonify({"result": json.loads(result)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
+    try:
+        # Retrieve parameters from the POST body.
+        request_data = request.get_json() or {}
+        # Expect the front end to pass the topic clustering result under the key "topic_result"
+        topic_result = request_data.get("topic_result", None)
+        if not topic_result:
+            return jsonify({"error": "No topic clustering result provided."}), 400
 
-    # Retrieve parameters from the POST body.
-    request_data = request.get_json() or {}
-    parameters = {
-        "data_source": request_data.get("data_source", "api"),
-        "subreddit": request_data.get("subreddit", ""),
-        "option": request_data.get("option", "reddit_submissions"),
-        "startDate": request_data.get("startDate", ""),   # Passed as ISO string
-        "endDate": request_data.get("endDate", "")          # Passed as ISO string
-        # Add any additional parameters as needed.
-    }
-    # parameters['subreddit'] = parameters['subreddit'].lower()
-    message = json.dumps(parameters)
-    topic_rpc_client = TopicModelRpcClient()
-    result = topic_rpc_client.call(message)
-    sentiment_rpc_client = SentimentAnalysisRpcClient()
-    result = sentiment_rpc_client.call(result)
-    return jsonify({"result": json.loads(result)}), 200
+        # Convert the topic_result to JSON string for the RPC call.
+        message = json.dumps(topic_result)
+
+        # Directly use the SentimentAnalysisRpcClient without calling the topic RPC again.
+        sentiment_rpc_client = SentimentAnalysisRpcClient()
+        result = sentiment_rpc_client.call(message)
+        return jsonify({"result": json.loads(result)}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
 
