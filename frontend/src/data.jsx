@@ -14,6 +14,7 @@ import 'datatables.net-buttons/js/buttons.html5.min';
 import 'datatables.net-buttons/js/buttons.print.min';
 import TopicTablesContainer from './TopicTablesContainer';
 import handleNotify from './toast';
+import SearchSuggestions from './SearchSuggestions';
 import { ToastContainer } from 'react-toastify';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
@@ -342,7 +343,7 @@ function Data() {
                 return labels.join(", ");
               }
             },
-            { data: "created_utc", title: "Created Date" },
+            { data: "created_utc", title: "Created UTC" },
             {
               data: null,
               title: "Actions",
@@ -415,7 +416,7 @@ function Data() {
             return labels.join(", ");
           }
         },
-        { data: "created_utc", title: "Created Date" },
+        { data: "created_utc", title: "Created UTC" },
         {
           data: null,
           title: "Actions",
@@ -559,7 +560,12 @@ function Data() {
         columns: [
           { data: "subreddit", title: "Subreddit", width: '10%' },
           { data: "title", title: "Title", width: '20%' },
-          { data: "selftext", title: "Body", width: '50%' },
+          {
+            data: "selftext",
+            title: "Body",
+            width: '50%',
+            className: 'wrap-text'
+          },
           { data: "created_utc", title: "Created UTC", width: '150px' },
           {
             data: "id",
@@ -701,7 +707,11 @@ function Data() {
               paging: true,
               searching: true,
               responsive: true,
-              autoWidth: false
+              autoWidth: false,
+              scrollY: '600px',
+              scrollCollapse: true,
+              scroller: true,
+              fixedHeader: true,
               // Add any additional DataTable options as needed.
             });
           }
@@ -883,6 +893,12 @@ function Data() {
     }
   };
 
+  const [isTyping, setIsTyping] = useState(false);
+  const handleChange = (e) => {
+    setIsTyping(true);
+    setSubreddit(e.target.value);
+  }
+
   const baseColors = [
     '255, 99, 132',
     '255, 159, 64',
@@ -981,15 +997,24 @@ function Data() {
                   type="text"
                   className="form-control"
                   value={subreddit}
-                  onChange={(e) => setSubreddit(e.target.value)}
+                  onChange={handleChange}
                   placeholder="Enter subreddit (e.g. news)"
                 />
               </div>
+
               {!subreddit.trim() && (
                 <div className="text-danger mt-2">
                   Please enter a subreddit.
                 </div>
               )}
+
+              <SearchSuggestions
+                subreddit={subreddit}
+                setSubreddit={setSubreddit}
+                getSubredditIcon={getSubredditIcon}
+                isTyping={isTyping}
+                setIsTyping={setIsTyping}
+              />
             </div>
 
             <div className="mt-4">
