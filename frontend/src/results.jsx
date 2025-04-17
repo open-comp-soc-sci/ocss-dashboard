@@ -83,8 +83,8 @@ const Results = () => {
                     {groupedResults.map((group, rowIndex) => (
                         <div className="row my-4 d-flex align-items-stretch" key={rowIndex}>
                             {group.map((resultCard, columnIndex) => (
-                                <div className="col-md-4" key={columnIndex}>
-                                    <div className="card h-100 p-3 shadow-lg">
+                                <div className="col-md-4 d-flex" key={columnIndex}>
+                                    <div className="card h-100 d-flex flex-column p-3 shadow-lg">
                                         <h5 className="card-title">Experiment {resultCard.id}</h5>
                                         <p className="card-text"><span className="text-decoration-underline">User:</span> {resultCard.email}</p>
 
@@ -94,7 +94,7 @@ const Results = () => {
                                             <span className="text-decoration-underline">Date Range:</span> {new Date(resultCard.startDate).toLocaleDateString()} - {new Date(resultCard.endDate).toLocaleDateString()}
                                         </p>
                                         <p className="card-text mb-0">
-                                            <span className="text-decoration-underline">Created:</span>{" "}
+                                            <span className="text-decoration-underline">Created UTC:</span>{" "}
                                             {new Date(resultCard.created_utc).toLocaleString()}
                                         </p>
 
@@ -105,8 +105,7 @@ const Results = () => {
 
                                         <button
                                             type="button"
-                                            margin-top="auto"
-                                            className="btn btn-primary mt-2"
+                                            className="btn btn-primary mt-2 mt-auto"
                                             data-bs-toggle="modal"
                                             data-bs-target="#showTopics"
                                             onClick={() => handleShowTopicInfo(resultCard.id)}
@@ -178,7 +177,6 @@ const Results = () => {
                                         {email === resultCard.email && (
                                             <button
                                                 className="btn btn-danger mt-3"
-                                                margin-top="auto"
                                                 onClick={() => handleRemoveResult(resultCard.id)}
                                             >
                                                 Remove Result
