@@ -1,5 +1,5 @@
 run: down build
-	docker run --name sentiment_container -d -v $(PWD):/app sentiment
+	docker run --name sentiment_container -d -v $(PWD):/app --gpus all sentiment
 	make logs
 
 
