@@ -546,6 +546,13 @@ function Data() {
               } else {
                 setDataMessage(false);
               }
+
+              if (apiData.data && apiData.data.length > 0) {
+                getSubredditIcon(apiData.data[0].subreddit);
+              }
+              else {
+                setSubredditIcon('../public/reddit-1.svg');
+              }
             })
             .catch(error => {
               console.error("Error fetching Arrow data:", error);
@@ -1115,9 +1122,9 @@ function Data() {
             </div>
 
 
-            <div className="mt-4">
+            <div className="mt-2">
               <button type="submit" className="btn btn-primary mt-2" disabled={!isOptionValid || !subreddit.trim()}>
-                Submit
+                Save Search
               </button>
             </div>
           </form>
