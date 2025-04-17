@@ -1,126 +1,146 @@
 import os
 import numpy as np
+import torch
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+from datasets import Dataset
 
+# Set your Hugging Face API token
 HUGGINGFACE_API_TOKEN = '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'
 os.environ['HUGGINGFACEHUB_API_TOKEN'] = HUGGINGFACE_API_TOKEN
 
 print("AAAAAA", flush=True)
-# Loading a Pre-Trained Model from HuggingFace Hub
-# Fine-tuned for sentiment analysis on Twitter data (subject to change)
 model_name = "cardiffnlp/twitter-roberta-base-sentiment"
+
+# Detect GPU
+device = 0 if torch.cuda.is_available() else -1  # 0 for first CUDA device, -1 for CPU
+print(f"Using device: {'cuda:0' if device == 0 else 'cpu'}")
+
+# Load tokenizer and model
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name)
-classifier = pipeline('sentiment-analysis', model=model, tokenizer=tokenizer)
+
+# Move model to GPU (and half precision if available)
+if device == 0:
+    model = model.to("cuda").half()
+
+# Create pipeline with device
+classifier = pipeline(
+    "sentiment-analysis",
+    model=model,
+    tokenizer=tokenizer,
+    device=device
+)
 print("BBBBBBBB", flush=True)
 
 
-def run_roberta_analysis(terms, sectioned_bodies):
-    # # LABEL_2 : Positive
-    # # LABEL_1 : NEUTRAL
-    # # LABEL_0 : Negativec
-
-    def run_classification(text):
-        result = classifier(text)[0]  # Extract first result
-        return {"label": result['label'], "score": result['score']}
-
-    # For each term:
-    # Counts the amount of times a term occurs
-    # Counts the amount of time each sentiment occurs
-    # Calculates the average confidence score for each sentiment
+def run_roberta_analysis(terms, sectioned_bodies, batch_size: int = 32):
+    """
+    Runs sentiment analysis using a HuggingFace Dataset for efficient GPU batching.
+    Args:
+        terms: list of strings
+        sectioned_bodies: list of lists of texts (one list per term)
+        batch_size: number of texts per GPU batch
+    Returns:
+        term_stats: dict with sentiment statistics per term
+    """
     term_stats = {
         term: {
             "occurrences": 0,
             "positive": {"count": 0, "avg_score": 0},
             "negative": {"count": 0, "avg_score": 0},
-            "neutral": {"count": 0, "avg_score": 0}
-        } 
+            "neutral": {"count": 0, "avg_score": 0},
+        }
         for term in terms
     }
 
     for term, bodies in zip(terms, sectioned_bodies):
-        for body in bodies[:1000]:
-            if len(body) < 514:
-                result = run_classification(body)
-                label = result['label']
-                score = result['score']
+        texts = [body[:512] for body in bodies[:1000] if len(body) < 1024]
+        # Build a Dataset
+        ds = Dataset.from_dict({"text": texts})
 
-                # Term occurence count
-                term_stats[term]["occurrences"] += 1
+        # Define inference function
+        def infer(batch):
+            results = classifier(
+                batch["text"],
+                truncation=True,
+                max_length=512,
+                batch_size=batch_size
+            )
+            return {
+                "label": [r["label"] for r in results],
+                "score": [r["score"] for r in results]
+            }
 
-                # Categorize sentiment and update counts/scores
-                if label == 'LABEL_2':  # Positive
-                    term_stats[term]["positive"]["count"] += 1
-                    term_stats[term]["positive"]["avg_score"] += score
-                elif label == 'LABEL_0':  # Negative
-                    term_stats[term]["negative"]["count"] += 1
-                    term_stats[term]["negative"]["avg_score"] += score
-                else:  # Neutral (LABEL_1)
-                    term_stats[term]["neutral"]["count"] += 1
-                    term_stats[term]["neutral"]["avg_score"] += score
+        # Run batched map
+        ds = ds.map(infer, batched=True, batch_size=batch_size)
 
-    # Calculate average sentiment scores
-    for term, stats in term_stats.items():
-        if stats["positive"]["count"] > 0:
-            stats["positive"]["avg_score"] /= stats["positive"]["count"]
-        if stats["negative"]["count"] > 0:
-            stats["negative"]["avg_score"] /= stats["negative"]["count"]
-        if stats["neutral"]["count"] > 0:
-            stats["neutral"]["avg_score"] /= stats["neutral"]["count"]
+        # Aggregate stats
+        for label, score in zip(ds["label"], ds["score"]):
+            term_stats[term]["occurrences"] += 1
+            if label == 'LABEL_2':
+                ts = term_stats[term]["positive"]
+            elif label == 'LABEL_0':
+                ts = term_stats[term]["negative"]
+            else:
+                ts = term_stats[term]["neutral"]
+            ts["count"] += 1
+            ts["avg_score"] += score
 
-    # Identifies:
-    # Which term occurred the most
-    # Which term ocurred the least
-    # Which terms on average are the most positively/negatively occurring
-    # Which terms on average are the least positively/negatively occurring
-    most_occurred = max(term_stats, key=lambda x: term_stats[x]["occurrences"])
-    least_occurred = min(term_stats, key=lambda x: term_stats[x]["occurrences"])
-    most_positive = max(term_stats, key=lambda x: term_stats[x]["positive"]["count"] / term_stats[x]["occurrences"] if term_stats[x]["occurrences"] > 0 else 0)
-    least_positive = min(term_stats, key=lambda x: term_stats[x]["positive"]["count"] / term_stats[x]["occurrences"] if term_stats[x]["occurrences"] > 0 else 0)
-    most_negative = max(term_stats, key=lambda x: term_stats[x]["negative"]["count"] / term_stats[x]["occurrences"] if term_stats[x]["occurrences"] > 0 else 0)
-    least_negative = min(term_stats, key=lambda x: term_stats[x]["negative"]["count"] / term_stats[x]["occurrences"] if term_stats[x]["occurrences"] > 0 else 0)
+    # Final averaging
+    for stats in term_stats.values():
+        for sentiment in ["positive", "negative", "neutral"]:
+            cnt = stats[sentiment]["count"]
+            if cnt > 0:
+                stats[sentiment]["avg_score"] /= cnt
 
-    # Prints the average sentiment confidence scores
+    # Print summary
+    most_occ = max(term_stats, key=lambda t: term_stats[t]["occurrences"])
+    least_occ = min(term_stats, key=lambda t: term_stats[t]["occurrences"])
+    print(f"Most occurred term: {most_occ} ({term_stats[most_occ]['occurrences']})")
+    print(f"Least occurred term: {least_occ} ({term_stats[least_occ]['occurrences']})")
     for term, stats in term_stats.items():
         print(f"{term}: Occurrences: {stats['occurrences']}, "
-            f"Positive: {stats['positive']['count']} (Avg Score: {stats['positive']['avg_score']:.2f}), "
-            f"Negative: {stats['negative']['count']} (Avg Score: {stats['negative']['avg_score']:.2f}), "
-            f"Neutral: {stats['neutral']['count']} (Avg Score: {stats['neutral']['avg_score']:.2f})")
-
-    # Prints occurrence stats
-    print(f"Most occurred term: {most_occurred} ({term_stats[most_occurred]['occurrences']})")
-    print(f"Least occurred term: {least_occurred} ({term_stats[least_occurred]['occurrences']})")
-    print(f"Most positively occurring term: {most_positive} ({term_stats[most_positive]['positive']['count'] / term_stats[most_positive]['occurrences']:.2f})")
-    print(f"Least positively occurring term: {least_positive} ({term_stats[least_positive]['positive']['count'] / term_stats[least_positive]['occurrences']:.2f})")
-    print(f"Most negatively occurring term: {most_negative} ({term_stats[most_negative]['negative']['count'] / term_stats[most_negative]['occurrences']:.2f})")
-    print(f"Least negatively occurring term: {least_negative} ({term_stats[least_negative]['negative']['count'] / term_stats[least_negative]['occurrences']:.2f})")
+              f"Positive: {stats['positive']['count']} (Avg: {stats['positive']['avg_score']:.2f}), "
+              f"Negative: {stats['negative']['count']} (Avg: {stats['negative']['avg_score']:.2f}), "
+              f"Neutral: {stats['neutral']['count']} (Avg: {stats['neutral']['avg_score']:.2f})")
 
     return term_stats
 
-def run_topic_roberta_analysis(df, allTopics):
-    def run_classification(text):
-        result = classifier(text)[0]  # Extract first result
-        return {"label": result['label'], "score": result['score']}
+
+def run_topic_roberta_analysis(df, allTopics, batch_size: int = 32):
+    """
+    Runs topic-level sentiment averaging via HuggingFace Dataset mapping.
+    """
     topics_array = np.array(allTopics)
     topic_stats = []
-    for topic in range(0, topics_array.max()+1):
-        topic_inds = np.where(topics_array == topic)[0]
-        topic_occurances = topic_inds.size
-        topic_avg_score = 0
-        for body in df["body"][topic_inds]:
-            result = run_classification(body[:512])
-            score = result['score']
-            
-            if result['label'] == 'LABEL_2':  # Positive
-                topic_avg_score += score
-            elif result['label'] == 'LABEL_0':  # Negative
-                topic_avg_score -= score
-            #else:  # Neutral (LABEL_1)
-        topic_avg_score = topic_avg_score / topic_occurances
-        topic_stats.append({
-            "topic": topic,
-            "score": topic_avg_score
-        })
-        
+
+    for topic in range(topics_array.max() + 1):
+        inds = np.where(topics_array == topic)[0]
+        texts = [df['body'][i][:512] for i in inds]
+        ds = Dataset.from_dict({"text": texts})
+
+        def infer(batch):
+            results = classifier(
+                batch["text"],
+                truncation=True,
+                max_length=512,
+                batch_size=batch_size
+            )
+            return {
+                "label": [r["label"] for r in results],
+                "score": [r["score"] for r in results]
+            }
+
+        ds = ds.map(infer, batched=True, batch_size=batch_size)
+
+        # Compute average score
+        total_score = 0
+        for label, score in zip(ds["label"], ds["score"]):
+            if label == 'LABEL_2':
+                total_score += score
+            elif label == 'LABEL_0':
+                total_score -= score
+        avg_score = total_score / len(texts) if texts else 0
+        topic_stats.append({"topic": topic, "score": avg_score})
+
     return topic_stats
-    
