@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 
-const SearchSuggestions = ({ subreddit, setSubreddit, getSubredditIcon, isTyping, setIsTyping }) => {
+const SearchSuggestions = ({ subreddit, setSubreddit, getSubredditIcon, isTyping, setIsTyping, dataLoadMessage }) => {
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [suggestionLoading, setSuggestionLoading] = useState(false);
     const suggestionCounter = useRef(0);
+    const suggestionRef = useRef(null);
 
     const fetchSubreddits = async (query) => {
         try {
@@ -46,6 +47,23 @@ const SearchSuggestions = ({ subreddit, setSubreddit, getSubredditIcon, isTyping
         setIsTyping(false);
     };
 
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                suggestionRef.current &&
+                !suggestionRef.current.contains(event.target)
+            ) {
+                setShowSuggestions(false);
+                setSuggestions([]);
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+
     return (
         <>
             {suggestionLoading && (
@@ -53,24 +71,26 @@ const SearchSuggestions = ({ subreddit, setSubreddit, getSubredditIcon, isTyping
             )}
 
             {showSuggestions && suggestions.length > 0 && (
-                <ul
-                    className="list-group mt-2"
-                    style={{ maxHeight: "200px", overflowY: "auto" }}
-                >
-                    {suggestions.map((suggestion, index) => (
-                        <li
-                            key={index}
-                            className="list-group-item"
-                            style={{ cursor: "pointer" }}
-                            onClick={() => handleSuggestionClick(suggestion)}
-                        >
-                            r/{suggestion}
-                        </li>
-                    ))}
-                </ul>
+                <div ref={suggestionRef}>
+                    <ul
+                        className="list-group mt-2"
+                        style={{ maxHeight: "200px", overflowY: "auto" }}
+                    >
+                        {suggestions.map((suggestion, index) => (
+                            <li
+                                key={index}
+                                className="list-group-item"
+                                style={{ cursor: "pointer" }}
+                                onClick={() => handleSuggestionClick(suggestion)}
+                            >
+                                r/{suggestion}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
             )}
 
-            {!suggestions.length && !suggestionLoading && isTyping && (
+            {!suggestions.length && !suggestionLoading && isTyping && !dataLoadMessage && (
                 <div className="text-danger mt-2">No subreddits match the search.</div>
             )}
         </>

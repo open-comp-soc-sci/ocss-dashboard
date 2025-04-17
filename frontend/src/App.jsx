@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
-import SignIn from './auth';
+import Protect from './Components/protect';
+import SignIn from './Components/auth';
 import Data from './data';
-import Protect from './protect';
 import Results from "./results";
 
 function App() {
@@ -53,7 +53,6 @@ function App() {
     localStorage.removeItem('email');
     setEmail('');
   };
-
 
   return (
     <Router>
