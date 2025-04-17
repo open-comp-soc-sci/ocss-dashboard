@@ -17,7 +17,7 @@ class SearchHistory(db.Model):
     startDate = db.Column(db.Date, nullable=False)
     endDate = db.Column(db.Date, nullable=False)
     option = db.Column(db.String(), nullable=False)
-    created_utc = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
+    created_utc = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
 # Results Model
 class ResultData(db.Model):
@@ -28,7 +28,7 @@ class ResultData(db.Model):
     subreddit = db.Column(db.String(), nullable=False)
     startDate = db.Column(db.Date, nullable=False)
     endDate = db.Column(db.Date, nullable=False)
-    created_utc = db.Column(db.DateTime, nullable=False, default=datetime.now(timezone.utc))
+    created_utc = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     # Topic Relationship
     groups = db.relationship(
         "TopicData",

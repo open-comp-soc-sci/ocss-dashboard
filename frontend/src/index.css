@@ -52,3 +52,17 @@ div.dt-length>select#dt-length-2 {
     max-width: 70%;
   }
 }
+
+.wrap-text {
+  word-break: break-word !important;
+  white-space: normal !important;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.display_cluster th {
+  position: sticky;
+  top: 0;
+  background-color: #212529;
+  z-index: 1;
+}
