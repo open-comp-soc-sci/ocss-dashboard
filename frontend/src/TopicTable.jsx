@@ -13,8 +13,8 @@ const TopicTable = ({ group, showPosts }) => {
   }, [group]);
 
   return (
-    <div>
-      <table ref={tableRef} className="display">
+    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+      <table ref={tableRef} className="display_cluster">
         <thead>
           <tr>
             <th>Topic Number</th>
