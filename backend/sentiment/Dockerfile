@@ -1,6 +1,11 @@
-FROM python:3.11-slim
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+
+# Install basic dependencies and Python
+RUN apt-get update && \
+    apt-get install -y python3 python3-pip gcc && \
+    apt-get clean
+
 WORKDIR /app
-RUN apt-get update && apt-get install -y gcc && apt-get clean
 
 # Copy requirements file and install dependencies
 COPY requirements.txt .
@@ -10,4 +15,4 @@ COPY printClusters.py /app/
 COPY readReddit.py /app/
 COPY roberta.py /app/
 
-CMD ["python", "-u", "sentiment_analysis_consumer.py"]
+CMD ["python3", "-u", "sentiment_analysis_consumer.py"]
