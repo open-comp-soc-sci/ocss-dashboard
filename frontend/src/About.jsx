@@ -10,7 +10,7 @@ const About = () => {
                 <div className="mb-6">
                     <h2 className="mb-2">Contents</h2>
                     <p className="p-2">
-                        Note: Only keep if we add more information, don't really think it would be necessary to have if the page is not expanded. Should we also include photos to help?
+                        Note: Only keep if we add more information, don't really think it would be necessary to have if the page is not expanded. Should we also include photos to help? Maybe photos to help describe the chart.
                     </p>
                     <ul className="list-disc list-inside text-blue-600">
                         <li><a href="#search">Subreddit Search</a></li>
@@ -30,10 +30,8 @@ const About = () => {
                     </h2>
                     <p>
                         Use this section to look up Reddit submissions or comments from specific subreddits.
-                        You can filter by date, keywords, and type of post (submission or comment).
-                    </p>
-                    <p className="p-2">
-                        Note: The Sentiment Keywords input does not affect the main data tables anymore. Consider removing it or does it affect topic clustering and sentiment analysis?
+                        You can filter by date and type of post (submission or comment). The subreddit search bar will
+                        give a list of the 10 most popular subreddits that match the text you have inputted.
                     </p>
                 </section>
 
@@ -55,11 +53,8 @@ const About = () => {
                         <i className="fas fa-smile me-2"></i> Sentiment Analysis
                     </h2>
                     <p>
-                        After the topic clustering completes, you can perform sentiment analysis to determine whether topics are positive, negative, or neutral,
+                        After the topic clustering completes, you can perform sentiment analysis to determine whether topic keywords are positive, negative, or neutral,
                         which will be displayed in the Sentiment Analysis Chart.
-                    </p>
-                    <p className="p-2">
-                        Note: The Sentiment Analysis is planned to be applied to keywords, not the topics. "Save as PNG" button not implemented yet.
                     </p>
                 </section>
 
