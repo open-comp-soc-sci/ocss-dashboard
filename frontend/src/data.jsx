@@ -36,13 +36,19 @@ function Data() {
   const [includeComments, setIncludeComments] = useState(true);
   const [debouncedSubreddit, setDebouncedSubreddit] = useState(subreddit);
   const isOptionValid = includeSubmissions || includeComments;
-  const [error, setError] = useState(null);
+  
   const [dataMessage, setDataMessage] = useState(false);
   const [subredditIcon, setSubredditIcon] = useState(null);
   const prevSubredditRef = useRef(null);
-  // Add these new state variables at the top along with your others.
+  
   const [clusteringResults, setClusteringResults] = useState(null);
+  
+  const [topicResult, setTopicResult] = useState(null);
+  const [sentimentResult, setSentimentResult] = useState(null);
+  const [loadingTopic, setLoadingTopic] = useState(false);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
+  const [error, setError] = useState(null);
+
 
   // Search History Variables
   const [isDeleting, setIsDeleting] = useState(false);
@@ -165,6 +171,62 @@ function Data() {
       border: `hsl(${hue}, 70%, 50%)`
     };
   };
+
+  const getBackgroundColor = (index) => `rgba(${baseColors[index % baseColors.length]}, 0.2)`;
+  const getBorderColor     = (index) => `rgb(${baseColors[index % baseColors.length]})`;  
+
+  const baseColors = [
+    '255, 99, 132',
+    '255, 159, 64',
+    '255, 205, 86',
+    '75, 192, 192',
+    '54, 162, 235',
+    '153, 102, 255',
+    '201, 203, 207'
+  ];
+
+  const staticLabels = ["January", "February", "March", "April", "May", "June", "July"];
+  const staticBackgroundColors = staticLabels.map((_, index) => getBackgroundColor(index));
+  const staticBorderColors = staticLabels.map((_, index) => getBorderColor(index));
+
+  const staticChartData = {
+    labels: staticLabels,
+    datasets: [{
+      label: 'My First Dataset',
+      data: [65, 59, 80, 81, 56, 55, 40],
+      backgroundColor: staticBackgroundColors,
+      borderColor: staticBorderColors,
+      borderWidth: 1
+    }]
+  };
+
+  const staticChartOptions = {
+    scales: {
+      y: {
+        beginAtZero: true
+      }
+    }
+  };
+
+  // 1) topic‐chart
+  let topicChartData, topicChartOptions;
+  if (topicResult?.groups) {
+    const labels = topicResult.groups.map(g => g.llmLabel);
+    const data   = topicResult.groups.map(g => g.postCount);
+    topicChartData   = { labels, datasets: [{ label: "Posts per Cluster", data, backgroundColor: labels.map((_,i)=>getBackgroundColor(i)), borderColor: labels.map((_,i)=>getBorderColor(i)), borderWidth:1 }] };
+    topicChartOptions = { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, title:{display:true,text:"Count"}}, x:{ title:{display:true,text:"Cluster"} } }, plugins:{ legend:{position:"bottom"} } };
+  }
+
+  // 2) sentiment‐chart
+  let sentimentChartData, sentimentChartOptions;
+  if (Array.isArray(sentimentResult)) {
+    const labels = sentimentResult.map(r => `Topic ${r.topic}`);
+    const data   = sentimentResult.map(r => r.score);
+    sentimentChartData   = { labels, datasets:[{ label:"Sentiment Score", data, backgroundColor: data.map(v=>getBarColor(v).background), borderColor: data.map(v=>getBarColor(v).border), borderWidth:1 }] };
+    sentimentChartOptions = { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, title:{display:true,text:"Score"}}, x:{ title:{display:true,text:"Topic"} } }, plugins:{ legend:{position:"bottom"} } };
+  }
+
+
 
   const handleKeywordKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -464,71 +526,74 @@ function Data() {
     });
   }, []);
 
+
   const runTopicClustering = async () => {
-    // Recalculate the combined option on the fly based on current checkbox values.
-    let combinedOption = "";
-    if (includeSubmissions && includeComments) {
-      combinedOption = "reddit_submissions,reddit_comments";
-    } else if (includeSubmissions) {
-      combinedOption = "reddit_submissions";
-    } else if (includeComments) {
-      combinedOption = "reddit_comments";
-    } else {
-      combinedOption = "";
-    }
-
-    // Clear previous results to show fresh results.
-    setClusteringResults(null);
-    setLoadingSentiment(true);  // You might consider renaming this to reflect topic clustering loading.
+    // build this freshly every time
+    const options = [
+      includeSubmissions && "reddit_submissions",
+      includeComments    && "reddit_comments"
+    ].filter(Boolean).join(",");
+  
+    setLoadingTopic(true);
     setError(null);
-
+    setSentimentResult(null);    // ← clear old sentiment
+  
     try {
       const response = await fetch("/api/run_topic", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subreddit,
-          option: combinedOption,
+          option:    options,
           startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
+          endDate:   endDate.toISOString()
         })
       });
       if (!response.ok) throw new Error("Topic clustering failed.");
-      const resultData = await response.json();
-      console.log("Topic Clustering Result:", resultData.result);
-      setClusteringResults(resultData.result);
+      const { result } = await response.json();   // { groups: [...], … }
+      setTopicResult(result);
+      handleNotify("Topic Clustering complete!");
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoadingSentiment(false);
+      setLoadingTopic(false);
     }
   };
-
-
+  
+  
   const runSentimentAnalysis = async () => {
+    if (!topicResult) return;
     setLoadingSentiment(true);
     setError(null);
-
+  
     try {
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Pass the topic clustering result to the sentiment endpoint
-        body: JSON.stringify({
-          topic_result: clusteringResults
-        })
+        body: JSON.stringify({ topic_result: topicResult })
       });
       if (!response.ok) throw new Error("Sentiment analysis failed.");
-      const resultData = await response.json();
-      console.log("Sentiment Analysis Result:", resultData.result);
-      // Update state with the new sentiment analysis result if needed
-      setClusteringResults(resultData.result);
+  
+      const { result } = await response.json();
+      console.log("raw RPC result:", result);
+  
+      // ⬇️ pull out exactly the array you need
+      const sentimentArray = Array.isArray(result)
+        ? result
+        : result.sentiment || [];
+  
+      setSentimentResult(sentimentArray);
+      // setTopicResult(null);
+      handleNotify("Sentiment Analysis complete!");
     } catch (err) {
       setError(err.message);
     } finally {
       setLoadingSentiment(false);
     }
   };
+  
+  
+  
 
   useEffect(() => {
     if (clusteringResults) {
@@ -598,42 +663,6 @@ function Data() {
     setSubreddit(e.target.value);
   }
 
-  const baseColors = [
-    '255, 99, 132',
-    '255, 159, 64',
-    '255, 205, 86',
-    '75, 192, 192',
-    '54, 162, 235',
-    '153, 102, 255',
-    '201, 203, 207'
-  ];
-
-  const getBackgroundColor = (index) => `rgba(${baseColors[index % baseColors.length]}, 0.2)`;
-  const getBorderColor = (index) => `rgb(${baseColors[index % baseColors.length]})`;
-
-  const staticLabels = ["January", "February", "March", "April", "May", "June", "July"];
-  const staticBackgroundColors = staticLabels.map((_, index) => getBackgroundColor(index));
-  const staticBorderColors = staticLabels.map((_, index) => getBorderColor(index));
-
-  const staticChartData = {
-    labels: staticLabels,
-    datasets: [{
-      label: 'My First Dataset',
-      data: [65, 59, 80, 81, 56, 55, 40],
-      backgroundColor: staticBackgroundColors,
-      borderColor: staticBorderColors,
-      borderWidth: 1
-    }]
-  };
-
-  const staticChartOptions = {
-    scales: {
-      y: {
-        beginAtZero: true
-      }
-    }
-  };
-
   let dynamicChartData, dynamicChartOptions;
 
   if (clusteringResults && clusteringResults.sentiment && Array.isArray(clusteringResults.sentiment)) {
@@ -674,6 +703,32 @@ function Data() {
       }
     };
   }
+
+      
+    // figure out which chart we actually want to show
+    const isSentiment = Array.isArray(sentimentResult);
+    const isTopic     = !isSentiment && Array.isArray(topicResult?.groups);
+
+    const chartData = isSentiment
+      ? sentimentChartData
+      : isTopic
+        ? topicChartData
+        : staticChartData;
+
+    const chartOptions = isSentiment
+      ? sentimentChartOptions
+      : isTopic
+        ? topicChartOptions
+        : staticChartOptions;
+
+    // change this key any time the underlying data changes
+    const chartKey = isSentiment
+      ? `sent-${JSON.stringify(sentimentResult)}`
+      : isTopic
+        ? `topic-${JSON.stringify(topicResult.groups)}`
+        : "static";
+
+
 
   return (
     <div className="container mt-5">
@@ -829,47 +884,56 @@ function Data() {
         <div className="col-md-8">
           <h2>Sentiment Analysis</h2>
           <p>Posts within the selected date range.</p>
-          <div
-            style={{
-              backgroundColor: '#333',
-              height: '350px',
-              borderRadius: '8px',
-              marginBottom: '1rem',
-              padding: '1rem'
-            }}
-          >
-            {clusteringResults && clusteringResults.sentiment && Array.isArray(clusteringResults.sentiment) ? (
-              <Bar data={dynamicChartData} options={dynamicChartOptions} />
-            ) : (
-              <Bar data={staticChartData} options={staticChartOptions} />
-            )}
+
+          <div style={{ backgroundColor: '#333', height: '350px', borderRadius: 8, padding: '1rem' }}>
+            <Bar
+              key={chartKey}
+              data={chartData}
+              options={chartOptions}
+            />
           </div>
+
 
 
 
           <button className="btn btn-secondary">Save as PNG</button>
 
           <div className="mt-4">
-            {/* If clusteringResults is not yet available, show the topic clustering button */}
-            {!clusteringResults ? (
+            {!topicResult ? (
+              // 1) before clustering
               <button
                 className="btn btn-success"
                 onClick={runTopicClustering}
-                disabled={loadingSentiment}
+                disabled={loadingTopic}
               >
-                {loadingSentiment ? 'Analyzing Topics...' : 'Run Topic Clustering'}
+                {loadingTopic ? 'Analyzing Topics…' : 'Run Topic Clustering'}
               </button>
-            ) : (
-              // Once clusteringResults is set, show the sentiment analysis button.
+
+            ) : !sentimentResult ? (
+              // 2) after clustering, before sentiment
               <button
-                className="btn btn-purple"  // make sure to define this class in your CSS
+                className="btn btn-purple"
                 onClick={runSentimentAnalysis}
                 disabled={loadingSentiment}
               >
-                {loadingSentiment ? 'Analyzing Sentiment...' : 'Start Sentiment Analysis'}
+                {loadingSentiment ? 'Analyzing Sentiment…' : 'Start Sentiment Analysis'}
+              </button>
+
+            ) : (
+              // 3) everything’s done—allow resetting
+              <button
+                className="btn btn-outline-secondary"
+                onClick={() => {
+                  setTopicResult(null);
+                  setSentimentResult(null);
+                }}
+              >
+                New Analysis
               </button>
             )}
           </div>
+
+
 
           <ToastContainer />
 
@@ -881,7 +945,7 @@ function Data() {
   <pre>{JSON.stringify(clusteringResults, null, 2)}</pre>
 )} */}
 
-      {clusteringResults && clusteringResults.groups && (
+      {topicResult?.groups && (
         <div className="row mt-4">
           <div className="col-md-12">
             <h2>Topic Clustering Results
@@ -895,7 +959,7 @@ function Data() {
                   marginLeft: '20px'
                 }} /></h2>
             <TopicTablesContainer
-              groups={clusteringResults.groups}
+              groups={topicResult.groups}
               handleSaveResults={handleSaveResults}
             />
 
