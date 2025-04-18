@@ -148,9 +148,17 @@ def get_arrow():
         query_arrow_time = time.time() - start_time
         print(f"Query Arrow time: {query_arrow_time:.4f} seconds", flush=True)
 
-        # Error out if subreddit does not exist or has no matching data
+        # Return empty Arrow stream
         if table.num_rows == 0:
-            return jsonify({"error": f"Subreddit 'r/{subreddit}' does not exist or contains no data in our database."}), 404
+            stream = io.BytesIO()
+            with ipc.new_stream(stream, table.schema) as writer:
+                writer.write_table(table)
+            stream.seek(0)
+            return Response(
+                stream.getvalue(), 
+                mimetype='application/vnd.apache.arrow.stream',
+                headers={"Content-Disposition": "attachment; filename=data.arrow"}
+            )
         
         # Serialize the Arrow Table into a binary stream.
         start_time = time.time()

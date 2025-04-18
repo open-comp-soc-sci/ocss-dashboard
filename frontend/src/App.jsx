@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 import Protect from './Components/protect';
 import SignIn from './Components/auth';
 import Data from './data';
-import Results from "./results";
+import Results from "./Results";
+import About from './About';
 
 function App() {
   const [userEmail, setEmail] = useState('');
@@ -183,10 +184,7 @@ function App() {
             />
             <Route
               path="/about"
-              element={
-                <div>
-                  <h1>What do we want on the about page???</h1>
-                </div>
+              element={<About />
               }
             />
             <Route
