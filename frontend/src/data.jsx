@@ -26,10 +26,8 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 function Data() {
   // Main Search Components
   const [subreddit, setSubreddit] = useState('TrigeminalNeuralgia');
-  const [sentimentKeywords, setSentimentKeywords] = useState('');
   const [startDate, setStartDate] = useState(new Date(2024, 11, 2)); // December 2, 2024
   const [endDate, setEndDate] = useState(new Date(2024, 11, 31));     // December 31, 2024
-  const [searchTerms, setSearchTerms] = useState([]);
   const [email] = useState(localStorage.getItem('email'));
   const [option, setOption] = useState("reddit_submissions, reddit_comments");
   const [includeSubmissions, setIncludeSubmissions] = useState(true);
@@ -60,12 +58,10 @@ function Data() {
   // This ref controls whether the main results DataTable should fetch data
   const tableInitializedRef = useRef(false);
   const subredditRef = useRef(subreddit);
-  const sentimentRef = useRef(sentimentKeywords);
   const startDateRef = useRef(startDate);
   const endDateRef = useRef(endDate);
   const optionRef = useRef(option);
   useEffect(() => { subredditRef.current = subreddit; }, [subreddit]);
-  useEffect(() => { sentimentRef.current = sentimentKeywords; }, [sentimentKeywords]);
   useEffect(() => { startDateRef.current = startDate; }, [startDate]);
   useEffect(() => { endDateRef.current = endDate; }, [endDate]);
   useEffect(() => { optionRef.current = option; }, [option]);
@@ -226,23 +222,6 @@ function Data() {
     sentimentChartOptions = { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, title:{display:true,text:"Score"}}, x:{ title:{display:true,text:"Topic"} } }, plugins:{ legend:{position:"bottom"} } };
   }
 
-
-
-  const handleKeywordKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const newTerm = e.target.value.trim();
-      if (newTerm && !searchTerms.includes(newTerm)) {
-        setSearchTerms(prevTerms => [...prevTerms, newTerm]);
-      }
-      e.target.value = '';
-    }
-  };
-
-  const removeTerm = (term) => {
-    setSearchTerms(searchTerms.filter(t => t !== term));
-  };
-
   // Initialize main results DataTable on mount or when dependencies change.
   useEffect(() => {
     const initDataTable = () => {
@@ -344,7 +323,7 @@ function Data() {
               const search_value = dt.search() || "";
               window.open(
                 `/api/export_data?format=excel&subreddit=${subreddit}` +
-                `&option=${option}&sentimentKeywords=${sentimentKeywords}` +
+                `&option=${option}` +
                 `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}` +
                 `&search_value=${encodeURIComponent(search_value)}`,
                 '_blank'
@@ -358,7 +337,7 @@ function Data() {
               const search_value = dt.search() || "";
               window.open(
                 `/api/export_data?format=csv&subreddit=${subreddit}` +
-                `&option=${option}&sentimentKeywords=${sentimentKeywords}` +
+                `&option=${option}` +
                 `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}` +
                 `&search_value=${encodeURIComponent(search_value)}`,
                 '_blank'
@@ -372,7 +351,7 @@ function Data() {
               const search_value = dt.search() || "";
               window.open(
                 `/api/export_data?format=json&subreddit=${subreddit}` +
-                `&option=${option}&sentimentKeywords=${sentimentKeywords}` +
+                `&option=${option}` +
                 `&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}` +
                 `&search_value=${encodeURIComponent(search_value)}`,
                 '_blank'
@@ -429,7 +408,7 @@ function Data() {
         $("#click-table").empty();
       }
     };
-  }, [debouncedSubreddit, option, sentimentKeywords, startDate, endDate]);
+  }, [debouncedSubreddit, option, startDate, endDate]);
 
   useEffect(() => {
     if (clusteringResults && clusteringResults.groups) {
@@ -476,7 +455,6 @@ function Data() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subreddit: `r/${subreddit}`,
-          sentimentKeywords: sentimentKeywords,
           startDate: startDate,
           endDate: endDate,
           option: option,
@@ -512,7 +490,7 @@ function Data() {
 
   useEffect(() => {
     // Automatically run the search on page load. Adjust to only fetch data and not add to search history.
-    const searchValue = `${subreddit} ${sentimentKeywords} ${startDate.toISOString()} ${endDate.toISOString()}`;
+    const searchValue = `${subreddit} ${startDate.toISOString()} ${endDate.toISOString()}`;
     fetchArrowData(0, 10, 1, searchValue, setError).then(() => {
       tableInitializedRef.current = true;
       if ($.fn.DataTable.isDataTable("#click-table")) {
@@ -631,7 +609,7 @@ function Data() {
 
   const handleSaveResults = async () => {
     try {
-      console.log(clusteringResults)
+      console.log(topicResult)
       const response = await fetch("/api/save_result", {
         method: "POST",
         headers: {
@@ -642,7 +620,7 @@ function Data() {
           subreddit,
           startDate: startDate.toISOString().split("T")[0],
           endDate: endDate.toISOString().split("T")[0],
-          groups: clusteringResults.groups
+          groups: topicResult.groups
         })
       });
 
@@ -770,33 +748,6 @@ function Data() {
                 setIsTyping={setIsTyping}
                 dataLoadMessage={dataLoadMessage}
               />
-            </div>
-
-            <div className="mt-4">
-              <h2>Sentiment Keywords</h2>
-              <div className="form-group">
-                <label>Type a keyword and press Enter</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  onKeyDown={handleKeywordKeyDown}
-                  value={sentimentKeywords}
-                  onChange={(e) => setSentimentKeywords(e.target.value)}
-                  placeholder="e.g. happy"
-                />
-              </div>
-              <div className="mt-2">
-                {searchTerms.map((term, index) => (
-                  <span
-                    key={index}
-                    className="badge bg-primary me-2"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => removeTerm(term)}
-                  >
-                    {term} <span className="ms-1">&times;</span>
-                  </span>
-                ))}
-              </div>
             </div>
 
             {/* Maybe hardcode the */}
@@ -1016,7 +967,6 @@ function Data() {
         setIncludeComments={setIncludeComments}
         setDebouncedSubreddit={setDebouncedSubreddit}
         setSubreddit={setSubreddit}
-        setSentimentKeywords={setSentimentKeywords}
         setStartDate={setStartDate}
         setEndDate={setEndDate}
         setOption={setOption}

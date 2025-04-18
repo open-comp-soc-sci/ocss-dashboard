@@ -13,7 +13,6 @@ class SearchHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     email = db.Column(db.String(), nullable=False)
     subreddit = db.Column(db.String(), nullable=False)
-    sentimentKeywords = db.Column(db.String(), nullable=False)
     startDate = db.Column(db.Date, nullable=False)
     endDate = db.Column(db.Date, nullable=False)
     option = db.Column(db.String(), nullable=False)
