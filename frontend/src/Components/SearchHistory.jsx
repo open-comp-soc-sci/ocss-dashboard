@@ -7,7 +7,6 @@ const SearchHistory = ({
     setIncludeComments,
     setDebouncedSubreddit,
     setSubreddit,
-    setSentimentKeywords,
     setStartDate,
     setEndDate,
     setOption,
@@ -129,13 +128,6 @@ const SearchHistory = ({
                     columns: [
                         { data: "subreddit", title: "Subreddit" },
                         {
-                            data: "sentimentKeywords",
-                            title: "Keywords",
-                            render: function (data) {
-                                return `<span class="truncate-text" title="${data}">${data}</span>`;
-                            }
-                        },
-                        {
                             data: "startDate",
                             title: "Start Date",
                             render: function (data) {
@@ -170,13 +162,13 @@ const SearchHistory = ({
                             data: null,
                             title: "Actions",
                             render: function (data, type, row) {
-                                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
+                                const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
                                 const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}" disabled>Delete</button>`;
                                 return searchButton + " " + deleteButton;
                             }
                         }
                     ],
-                    order: [[5, 'desc']],
+                    order: [[4, 'desc']],
                     paging: false,
                     searching: false,
                     ordering: false,
@@ -201,13 +193,6 @@ const SearchHistory = ({
             data: searchData,
             columns: [
                 { data: "subreddit", title: "Subreddit" },
-                {
-                    data: "sentimentKeywords",
-                    title: "Keywords",
-                    render: function (data) {
-                        return `<span class="truncate-text" title="${data}">${data}</span>`;
-                    }
-                },
                 {
                     data: "startDate",
                     title: "Start Date",
@@ -243,13 +228,13 @@ const SearchHistory = ({
                     data: null,
                     title: "Actions",
                     render: function (data, type, row) {
-                        const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-sentiment="${row.sentimentKeywords}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
+                        const searchButton = `<a href="#" class="btn btn-primary go-to-btn" data-search-id="${row.search_id}" data-subreddit="${row.subreddit}" data-start-date="${row.startDate}" data-end-date="${row.endDate}" data-option="${row.option}" disabled>Go To Search</a>`;
                         const deleteButton = `<button class="btn btn-danger delete-btn" data-search-id="${row.search_id}">Delete</button>`;
                         return searchButton + " " + deleteButton;
                     }
                 }
             ],
-            order: [[5, 'desc']],
+            order: [[4, 'desc']],
             paging: true,
             searching: false,
             ordering: true,
@@ -274,11 +259,10 @@ const SearchHistory = ({
 
         $(document).on("click", ".go-to-btn", function () {
             const subredditGo = $(this).data("subreddit").replace(/^r\//, '');
-            const sentimentGo = $(this).data("sentiment");
             const startDateGo = new Date($(this).data("start-date"));
             const endDateGo = new Date($(this).data("end-date"));
             const optionGo = $(this).data("option");
-            const searchValue = `${subredditGo} ${sentimentGo} ${startDateGo.toISOString()} ${endDateGo.toISOString()} ${optionGo}`;
+            const searchValue = `${subredditGo} ${startDateGo.toISOString()} ${endDateGo.toISOString()} ${optionGo}`;
 
             if (optionGo.includes('reddit_submissions')) {
                 setIncludeSubmissions(true);
@@ -296,7 +280,6 @@ const SearchHistory = ({
 
             setDebouncedSubreddit(subredditGo);
             setSubreddit(subredditGo);
-            setSentimentKeywords(sentimentGo);
             setStartDate(startDateGo);
             setEndDate(endDateGo);
             setOption(optionGo);
@@ -335,7 +318,6 @@ const SearchHistory = ({
                     <thead>
                         <tr>
                             <th>Subreddit</th>
-                            <th>Keywords</th>
                             <th>Start Date</th>
                             <th>End Date</th>
                             <th>Post Option</th>
