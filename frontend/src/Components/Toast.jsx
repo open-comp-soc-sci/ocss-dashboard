@@ -1,22 +1,24 @@
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-function handleNotify() {
-    toast("Topic Clustering Complete!");
+function handleNotify(message = "Done!") {
+  // in‑page toast
+  toast(message);
 
-    if (Notification.permission === "granted") {
-        new Notification("Topic Clustering Complete!", {
-            icon: "../public/ocsslogo.svg",
-        });
-    } else if (Notification.permission !== "denied") {
-        Notification.requestPermission().then((permission) => {
-            if (permission === "granted") {
-                new Notification("Topic Clustering Complete!", {
-                    icon: "../public/ocsslogo.svg",
-                });
-            }
-        });
-    }
+  // desktop notification
+  const showDesktop = () => new Notification(message, {
+    icon: "../public/ocsslogo.svg",
+  });
+
+  if (Notification.permission === "granted") {
+    showDesktop();
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission().then((permission) => {
+      if (permission === "granted") {
+        showDesktop();
+      }
+    });
+  }
 }
 
 export default handleNotify;
