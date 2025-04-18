@@ -13,7 +13,6 @@ import json
 def addSearch():
     data = request.get_json()
     subreddit = data.get("subreddit")
-    sentimentKeywords = data.get("sentimentKeywords")
     startDate = data.get("startDate")
     endDate = data.get("endDate")
     option = data.get("option")
@@ -22,7 +21,6 @@ def addSearch():
     new_search = SearchHistory(
         email=email,
         subreddit=subreddit,
-        sentimentKeywords=sentimentKeywords,
         startDate=startDate,
         endDate=endDate,
         option=option,
@@ -43,7 +41,6 @@ def getSearch(email):
             {
                 "search_id": item.id,
                 "subreddit": item.subreddit,
-                "sentimentKeywords": item.sentimentKeywords,
                 "startDate": item.startDate,
                 "endDate": item.endDate,
                 "option": item.option,

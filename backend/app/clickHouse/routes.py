@@ -243,7 +243,6 @@ def export_data():
         # subreddit = subreddit.lower()
         # Read our search parameter from a simpler key.
         search_value = request.args.get('search_value', '', type=str)
-        sentiment_keywords = request.args.get('sentimentKeywords', '', type=str)
         start_date = request.args.get('startDate', None, type=str)
         end_date = request.args.get('endDate', None, type=str)
         export_format = request.args.get('format', default='csv')
@@ -271,11 +270,6 @@ def export_data():
         # Use search_value to filter by the body/selftext column.
         if search_value:
             conditions.append(f"selftext LIKE '%{search_value}%'")
-        if sentiment_keywords:
-            if "reddit_submissions" in option:
-                conditions.append(f"(title LIKE '%{sentiment_keywords}%' OR selftext LIKE '%{sentiment_keywords}%')")
-            else:
-                conditions.append(f"(body LIKE '%{sentiment_keywords}%')")
         if start_date:
             start_date_formatted = start_date.replace("T", " ").split(".")[0]
             conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
