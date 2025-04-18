@@ -1,10 +1,12 @@
-from flask import jsonify, request
+from flask import jsonify, request, Response
 from datetime import datetime, timezone
 from app.models import SearchHistory
 from app.models import ResultData
 from app.models import TopicData
 from app.extensions import db
 from . import searchHistory_BP
+from sqlalchemy.orm import load_only, subqueryload
+import json
 
 #Search Table Functions
 @searchHistory_BP.route("/api/add_search", methods=["POST"])
@@ -143,32 +145,39 @@ def saveResult():
 @searchHistory_BP.route("/api/get_result", methods=["GET"])
 def getResult():
     try:
-        results = ResultData.query.order_by(ResultData.created_utc.desc()).all()
+        results = (
+            ResultData.query
+            .options(load_only(
+                ResultData.id, ResultData.email, ResultData.subreddit,
+                ResultData.startDate, ResultData.endDate, ResultData.created_utc
+            ))
+            .order_by(ResultData.created_utc.desc())
+            .all()
+        )
+
+        topic_data = TopicData.query.options(
+            load_only(TopicData.result_id, TopicData.topics)
+        ).all()
+
+        topics_by_result = {}
+        for topic in topic_data:
+            topics_by_result.setdefault(topic.result_id, []).append(topic)
 
         results_data = []
         for result in results:
-             # 3 Highest Post Count Groups
-            resultGroups = (
-                TopicData.query
-                .filter_by(result_id=result.id)
-                .all()
-            )
-
+            resultGroups = topics_by_result.get(result.id, [])
             topics_info = []
             for group in resultGroups:
-                for topic in group.topics:  # Iterate through each topic in the 'topics' JSON
-                    topic_info = {
+                for topic in group.topics:
+                    topics_info.append({
                         "topicNumber": topic.get("topicNumber"),
                         "topicLabel": topic.get("topicLabel"),
                         "postCount": topic.get("postCount"),
-                    }
-                    topics_info.append(topic_info)
+                    })
 
-            sorted_topics = sorted(topics_info, key=lambda x: x["postCount"], reverse=True)
-            top_3_topics = sorted_topics[:3]
-
-            resultLabels = [top_3_topics[i]["topicLabel"] if i < len(top_3_topics) else "N/A" for i in range(3)]
-            resultCounts = [top_3_topics[i]["postCount"] if i < len(top_3_topics) else 0 for i in range(3)]
+            top_3_topics = sorted(topics_info, key=lambda x: x["postCount"], reverse=True)[:3]
+            resultLabels = [t["topicLabel"] if i < len(top_3_topics) else "N/A" for i, t in enumerate(top_3_topics + [{}]*3)]
+            resultCounts = [t["postCount"] if i < len(top_3_topics) else 0 for i, t in enumerate(top_3_topics + [{}]*3)]
 
             results_data.append({
                 "id": result.id,
@@ -193,26 +202,36 @@ def getResult():
 @searchHistory_BP.route("/api/get_topics/<int:result_id>", methods=["GET"])
 def getTopics(result_id):
     try:
-        topics = TopicData.query.filter_by(result_id=result_id).all()
+        topics = TopicData.query.options(
+            load_only(TopicData.id, TopicData.group_number, TopicData.group_label, TopicData.topics, TopicData.example_posts)
+        ).filter_by(result_id=result_id).all()
 
         if not topics:
             return jsonify({"error": "There are no topic clusters for this result."}), 404
 
-        resultTopics = []
-        for topic in topics:
-           for topic_item in topic.topics:
-                resultTopics.append({
-                    "id": topic.id,
-                    "group_number": topic.group_number,
-                    "topic_number": topic_item.get("topicNumber"),
-                    "group_label": topic.group_label,
-                    "topicLabel": topic_item.get("topicLabel"),
-                    "ctfidfKeywords": topic_item.get("ctfidfKeywords"),
-                    "postCount": topic_item.get("postCount"),
-                    "example_posts": topic.example_posts
-                })
+        def generate_json():
+            yield '{"topics":['
+            first = True
+            for topic in topics:
+                for topic_item in topic.topics:
+                    if not first:
+                        yield ','
+                    else:
+                        first = False
+                    data = {
+                        "id": topic.id,
+                        "group_number": topic.group_number,
+                        "topic_number": topic_item.get("topicNumber"),
+                        "group_label": topic.group_label,
+                        "topicLabel": topic_item.get("topicLabel"),
+                        "ctfidfKeywords": topic_item.get("ctfidfKeywords"),
+                        "postCount": topic_item.get("postCount"),
+                        "example_posts": topic.example_posts
+                    }
+                    yield json.dumps(data)
+            yield ']}'
 
-        return jsonify({"topics": resultTopics}), 200
+        return Response(generate_json(), content_type="application/json")
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
