@@ -56,7 +56,7 @@ const Results = () => {
             const response = await fetch(`/api/get_topics/${resultId}`);
             const data = await response.json();
 
-            console.log(data.topics);
+            //console.log(data.topics);
 
             if (data.error) {
                 setError("Error fetching topic clustering data for this result.");
