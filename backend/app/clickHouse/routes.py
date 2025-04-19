@@ -211,35 +211,15 @@ def run_topic():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
-    try:
-        # Retrieve parameters from the POST body.
-        request_data = request.get_json() or {}
-        # Expect the front end to pass the topic clustering result under the key "topic_result"
-        topic_result = request_data.get("topic_result", None)
-        if not topic_result:
-            return jsonify({"error": "No topic clustering result provided."}), 400
+    topic_result = request.get_json().get("topic_result")
+    # just forward the full thing:
+    message = json.dumps(topic_result)
+    result = SentimentAnalysisRpcClient().call(message)
+    return jsonify({"result": json.loads(result)}), 200
 
-        # Create map of concatenated keywords from topic ID
-        ctfidfKeywords_sentiment = []
-        for topic in topic_result:
-            ctfidfKeywords = topic.get("ctfidfKeywords", [])
-            ctfidfKeywords_text = " ".join(ctfidfKeywords)  # Concatenate keywords
-            ctfidfKeywords_sentiment.append({
-                "topic_id": topic.get("topic_id"),
-                "ctfidfKeywords": ctfidfKeywords_text
-            })
-
-        # Convert the topic_result to JSON string for the RPC call.
-        message = json.dumps(ctfidfKeywords_sentiment)
-
-        # Directly use the SentimentAnalysisRpcClient without calling the topic RPC again.
-        sentiment_rpc_client = SentimentAnalysisRpcClient()
-        result = sentiment_rpc_client.call(message)
-        return jsonify({"result": json.loads(result)}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
 def export_data():
