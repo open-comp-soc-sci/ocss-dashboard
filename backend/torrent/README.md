@@ -30,3 +30,9 @@ clickhouse-client --host 127.0.0.1 --port 9000 --user default --password heyheyh
 
 ```
 
+# Populate search table
+
+```bash
+python -u populate_subreddit_search_table.py
+```
+
