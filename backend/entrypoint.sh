@@ -10,7 +10,7 @@ done
 >&2 echo "Database is up - creating tables..."
 
 # Run the table creation script
-python create_tables.py
+python -u create_tables.py
 
 echo "Starting Flask server..."
 exec python -u -m flask run --host=0.0.0.0 --port=5000
