@@ -14,6 +14,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "apache-arrow": "^19.0.1",
     "chart.js": "^4.4.9",
+    "chartjs-chart-box-and-violin-plot": "^4.0.0",
     "datatables.net": "^2.2.2",
     "datatables.net-bs5": "^2.2.2",
     "datatables.net-buttons": "^3.2.2",
