@@ -2,31 +2,42 @@ import React, { useEffect, useRef } from 'react';
 import $ from 'jquery';
 import 'datatables.net-bs5';
 
-console.log("TopicTable component loaded");
-
 const TopicTable = ({ group, showPosts }) => {
   const tableRef = useRef(null);
 
   useEffect(() => {
-    console.log("TopicTable component mounted for group:", group);
-    // DataTables initialization (if needed) can go here.
-  }, [group]);
+    // turn this table into a DataTable
+    const dt = $(tableRef.current).DataTable({
+      
+      responsive: true,
+      searching: false,
+      paging: false,
+      fixedHeader: true,
+
+    });
+    return () => {
+      dt.destroy();
+    };
+  }, [group]);  // re‑init when the group changes
 
   return (
-    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-      <table ref={tableRef} className="display_cluster">
+    <div >
+      <table
+        ref={tableRef}
+        className="table table-dark table-striped table-bordered"
+      >
         <thead>
           <tr>
-            <th>Topic Number</th>
-            <th>Topic Label</th>
+            <th>Topic #</th>
+            <th>Label</th>
             <th>Keywords</th>
-            <th>Post Count</th>
+            <th>Count</th>
             {showPosts && <th>Sample Posts</th>}
           </tr>
         </thead>
         <tbody>
-          {group.topics.map((topic, index) => (
-            <tr key={index}>
+          {group.topics.map((topic, i) => (
+            <tr key={i}>
               <td>{topic.topicNumber}</td>
               <td>{topic.topicLabel}</td>
               <td>{topic.ctfidfKeywords}</td>
