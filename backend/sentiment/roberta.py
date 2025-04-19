@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
 from datasets import Dataset
+from collections import defaultdict
 
 # Set your Hugging Face API token
 HUGGINGFACE_API_TOKEN = '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'
@@ -32,8 +33,7 @@ classifier = pipeline(
 )
 print("BBBBBBBB", flush=True)
 
-
-def run_roberta_analysis(terms, sectioned_bodies, batch_size: int = 32):
+def run_roberta_analysis(terms, sectioned_bodies, topics, batch_size: int = 32):
     """
     Runs sentiment analysis using a HuggingFace Dataset for efficient GPU batching.
     Args:
@@ -43,21 +43,38 @@ def run_roberta_analysis(terms, sectioned_bodies, batch_size: int = 32):
     Returns:
         term_stats: dict with sentiment statistics per term
     """
-    term_stats = {
-        term: {
-            "occurrences": 0,
-            "positive": {"count": 0, "avg_score": 0},
-            "negative": {"count": 0, "avg_score": 0},
-            "neutral": {"count": 0, "avg_score": 0},
-        }
-        for term in terms
-    }
 
-    for term, bodies in zip(terms, sectioned_bodies):
-        texts = [body[:512] for body in bodies[:1000] if len(body) < 1024]
-        # Build a Dataset
+    term_topic_stats = {}
+    topic_to_terms = defaultdict(list)
+
+    for term, bodies, topic in zip(terms, sectioned_bodies, topics):
+        # print(f"Term: {term}, Matched Bodies: {len(bodies)}")
+        if not bodies:
+            continue
+
+        key = (term, topic)
+        if key not in term_topic_stats:
+            term_topic_stats[key] = {
+                "occurrences": 0,
+                "positive": {"count": 0, "avg_score": 0.0},
+                "negative": {"count": 0, "avg_score": 0.0},
+                "neutral": {"count": 0, "avg_score": 0.0},
+            }
+        topic_to_terms[topic].append(term)
+
+        # Prepare the texts, truncated to fit the max length of the model
+        texts = [body[:512] for body in bodies[:1000]]
+        
+        # Skip empty texts
+        if not texts:
+            print(f"[SKIP] Term: {term} — No valid texts to analyze.")
+            continue
+
+        # Build a dataset
         ds = Dataset.from_dict({"text": texts})
 
+        # print(f"Term: {term} — Body text: {bodies[:3]}")
+        # print(f"Term: {term} — Text count: {len(texts)}")
         # Define inference function
         def infer(batch):
             results = classifier(
@@ -66,45 +83,34 @@ def run_roberta_analysis(terms, sectioned_bodies, batch_size: int = 32):
                 max_length=512,
                 batch_size=batch_size
             )
+            # print(f"Infer {len(results)} results")
             return {
                 "label": [r["label"] for r in results],
                 "score": [r["score"] for r in results]
             }
 
-        # Run batched map
         ds = ds.map(infer, batched=True, batch_size=batch_size)
 
         # Aggregate stats
         for label, score in zip(ds["label"], ds["score"]):
-            term_stats[term]["occurrences"] += 1
+            term_topic_stats[key]["occurrences"] += 1        
             if label == 'LABEL_2':
-                ts = term_stats[term]["positive"]
+                bucket = term_topic_stats[key]["positive"]
             elif label == 'LABEL_0':
-                ts = term_stats[term]["negative"]
+                bucket = term_topic_stats[key]["negative"]
             else:
-                ts = term_stats[term]["neutral"]
-            ts["count"] += 1
-            ts["avg_score"] += score
+                bucket = term_topic_stats[key]["neutral"]           
+            bucket["count"] += 1
+            bucket["avg_score"] += score
 
-    # Final averaging
-    for stats in term_stats.values():
+    # Final averaging of the sentiment scores
+    for stats in term_topic_stats.values():
         for sentiment in ["positive", "negative", "neutral"]:
             cnt = stats[sentiment]["count"]
             if cnt > 0:
                 stats[sentiment]["avg_score"] /= cnt
 
-    # Print summary
-    most_occ = max(term_stats, key=lambda t: term_stats[t]["occurrences"])
-    least_occ = min(term_stats, key=lambda t: term_stats[t]["occurrences"])
-    print(f"Most occurred term: {most_occ} ({term_stats[most_occ]['occurrences']})")
-    print(f"Least occurred term: {least_occ} ({term_stats[least_occ]['occurrences']})")
-    for term, stats in term_stats.items():
-        print(f"{term}: Occurrences: {stats['occurrences']}, "
-              f"Positive: {stats['positive']['count']} (Avg: {stats['positive']['avg_score']:.2f}), "
-              f"Negative: {stats['negative']['count']} (Avg: {stats['negative']['avg_score']:.2f}), "
-              f"Neutral: {stats['neutral']['count']} (Avg: {stats['neutral']['avg_score']:.2f})")
-
-    return term_stats
+    return term_topic_stats
 
 
 def run_topic_roberta_analysis(df, allTopics, batch_size: int = 32):
@@ -117,6 +123,7 @@ def run_topic_roberta_analysis(df, allTopics, batch_size: int = 32):
     for topic in range(topics_array.max() + 1):
         inds = np.where(topics_array == topic)[0]
         texts = [df['body'][i][:512] for i in inds]
+        # print("Texts Topics: ", texts)
         ds = Dataset.from_dict({"text": texts})
 
         def infer(batch):
