@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import io
 import pyarrow as pa
-from roberta import run_roberta_analysis
+from nli_aspect import run_nli_aspect_analysis
 
 def load_dataframe(meta):
     # Get API parameters from meta
@@ -81,7 +81,7 @@ def main():
 
     df = load_dataframe(meta)
     terms, sectioned_bodies, topics = preproccess_termed_sentiment_data(df, groups)
-    stats = run_roberta_analysis(terms, sectioned_bodies, topics=topics)
+    stats = run_nli_aspect_analysis(terms, sectioned_bodies, topics=topics)
 
     print(json.dumps(stats, indent=2))
 
