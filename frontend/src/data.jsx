@@ -568,19 +568,7 @@ function Data() {
 
     // Check if SuggestionsModel is empty and populate if needed
     // For future updates either removes this check or drop the table and rebuild
-    fetch('/api/check_list')
-      .then(res => res.json())
-      .then(data => {
-        if (data.empty) {
-          console.log('Populatating Suggestions List');
-          return fetch('/api/create_list');
-        }
-        //console.log('List already populated');
-      })
-      .catch((error) => {
-        console.error("Error populating suggestions list:", error);
-      });
-
+    
   }, []);
 
   const runTopicClustering = async () => {
