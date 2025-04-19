@@ -115,7 +115,8 @@ def get_arrow():
             base_query = "SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions"
         elif option == "reddit_comments":
             base_query = "SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
-        
+        # Fix to prevent error to console
+
         conditions = []
         if subreddit:
             conditions.append(f"subreddit = '{subreddit}'")
@@ -185,7 +186,6 @@ def get_arrow():
     finally:
         release_client(client)
 
-
 @clickHouse_BP.route("/api/run_topic", methods=["POST"])
 def run_topic():
     try:
@@ -211,7 +211,6 @@ def run_topic():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
     try:
@@ -222,8 +221,18 @@ def run_sentiment():
         if not topic_result:
             return jsonify({"error": "No topic clustering result provided."}), 400
 
+        # Create map of concatenated keywords from topic ID
+        ctfidfKeywords_sentiment = []
+        for topic in topic_result:
+            ctfidfKeywords = topic.get("ctfidfKeywords", [])
+            ctfidfKeywords_text = " ".join(ctfidfKeywords)  # Concatenate keywords
+            ctfidfKeywords_sentiment.append({
+                "topic_id": topic.get("topic_id"),
+                "ctfidfKeywords": ctfidfKeywords_text
+            })
+
         # Convert the topic_result to JSON string for the RPC call.
-        message = json.dumps(topic_result)
+        message = json.dumps(ctfidfKeywords_sentiment)
 
         # Directly use the SentimentAnalysisRpcClient without calling the topic RPC again.
         sentiment_rpc_client = SentimentAnalysisRpcClient()
@@ -231,9 +240,6 @@ def run_sentiment():
         return jsonify({"result": json.loads(result)}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-
 
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
 def export_data():

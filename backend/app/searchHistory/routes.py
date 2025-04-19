@@ -232,7 +232,6 @@ def getTopics(result_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
     
 @searchHistory_BP.route("/api/remove_result/<int:id>", methods=["DELETE"])
 def removeResult(id):
