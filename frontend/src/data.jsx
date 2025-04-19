@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ToastContainer } from 'react-toastify';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement } from 'chart.js';
+import { PointElement, LineElement, BarElement } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, Tooltip, Title, Legend } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -20,7 +21,6 @@ import handleNotify from './Components/Toast';
 import SearchSuggestions from './Components/SearchSuggestions';
 import SearchHistory from './Components/SearchHistory';
 
-
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 function Data() {
@@ -34,13 +34,13 @@ function Data() {
   const [includeComments, setIncludeComments] = useState(true);
   const [debouncedSubreddit, setDebouncedSubreddit] = useState(subreddit);
   const isOptionValid = includeSubmissions || includeComments;
-  
+
   const [dataMessage, setDataMessage] = useState(false);
   const [subredditIcon, setSubredditIcon] = useState(null);
   const prevSubredditRef = useRef(null);
-  
+
   const [clusteringResults, setClusteringResults] = useState(null);
-  
+
   const [topicResult, setTopicResult] = useState(null);
   const [sentimentResult, setSentimentResult] = useState(null);
   const [loadingTopic, setLoadingTopic] = useState(false);
@@ -169,7 +169,7 @@ function Data() {
   };
 
   const getBackgroundColor = (index) => `rgba(${baseColors[index % baseColors.length]}, 0.2)`;
-  const getBorderColor     = (index) => `rgb(${baseColors[index % baseColors.length]})`;  
+  const getBorderColor = (index) => `rgb(${baseColors[index % baseColors.length]})`;
 
   const baseColors = [
     '255, 99, 132',
@@ -208,19 +208,84 @@ function Data() {
   let topicChartData, topicChartOptions;
   if (topicResult?.groups) {
     const labels = topicResult.groups.map(g => g.llmLabel);
-    const data   = topicResult.groups.map(g => g.postCount);
-    topicChartData   = { labels, datasets: [{ label: "Posts per Cluster", data, backgroundColor: labels.map((_,i)=>getBackgroundColor(i)), borderColor: labels.map((_,i)=>getBorderColor(i)), borderWidth:1 }] };
-    topicChartOptions = { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, title:{display:true,text:"Count"}}, x:{ title:{display:true,text:"Cluster"} } }, plugins:{ legend:{position:"bottom"} } };
+    const data = topicResult.groups.map(g => g.postCount);
+    topicChartData = { labels, datasets: [{ label: "Posts per Cluster", data, backgroundColor: labels.map((_, i) => getBackgroundColor(i)), borderColor: labels.map((_, i) => getBorderColor(i)), borderWidth: 1 }] };
+    topicChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Count" } }, x: { title: { display: true, text: "Cluster" } } }, plugins: { legend: { position: "bottom" } } };
   }
 
   // 2) sentiment‐chart
   let sentimentChartData, sentimentChartOptions;
   if (Array.isArray(sentimentResult)) {
     const labels = sentimentResult.map(r => `Topic ${r.topic}`);
-    const data   = sentimentResult.map(r => r.score);
-    sentimentChartData   = { labels, datasets:[{ label:"Sentiment Score", data, backgroundColor: data.map(v=>getBarColor(v).background), borderColor: data.map(v=>getBarColor(v).border), borderWidth:1 }] };
-    sentimentChartOptions = { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, title:{display:true,text:"Score"}}, x:{ title:{display:true,text:"Topic"} } }, plugins:{ legend:{position:"bottom"} } };
+    const data = sentimentResult.map(r => r.score);
+    sentimentChartData = { labels, datasets: [{ label: "Sentiment Score", data, backgroundColor: data.map(v => getBarColor(v).background), borderColor: data.map(v => getBarColor(v).border), borderWidth: 1 }] };
+    sentimentChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Score" } }, x: { title: { display: true, text: "Topic" } } }, plugins: { legend: { position: "bottom" } } };
   }
+
+  let dynamicChartData, dynamicChartOptions;
+
+  if (clusteringResults && clusteringResults.sentiment && Array.isArray(clusteringResults.sentiment)) {
+    const sentimentArray = clusteringResults.sentiment;
+    const dynamicLabels = sentimentArray.map(result => `Topic ${result.topic}`);
+    const dynamicData = sentimentArray.map(result => result.score);
+    // Use the getBarColor function to compute colors based on the amplified score.
+    const dynamicBackgroundColors = sentimentArray.map(result => getBarColor(result.score).background);
+    const dynamicBorderColors = sentimentArray.map(result => getBarColor(result.score).border);
+
+
+    dynamicChartData = {
+      labels: dynamicLabels,
+      datasets: [{
+        label: 'Sentiment Score',
+        data: dynamicData,
+        backgroundColor: dynamicBackgroundColors,
+        borderColor: dynamicBorderColors,
+        borderWidth: 1
+      }]
+    };
+
+    dynamicChartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'Sentiment Score' }
+        },
+        x: {
+          title: { display: true, text: 'Topic' }
+        }
+      },
+      plugins: {
+        title: { display: true, text: 'Topic Sentiment Analysis' },
+        legend: { position: 'bottom' }
+      }
+    };
+  }
+
+
+  // figure out which chart we actually want to show
+  const isSentiment = Array.isArray(sentimentResult);
+  const isTopic = !isSentiment && Array.isArray(topicResult?.groups);
+
+  const chartData = isSentiment
+    ? sentimentChartData
+    : isTopic
+      ? topicChartData
+      : staticChartData;
+
+  const chartOptions = isSentiment
+    ? sentimentChartOptions
+    : isTopic
+      ? topicChartOptions
+      : staticChartOptions;
+
+  // change this key any time the underlying data changes
+  const chartKey = isSentiment
+    ? `sent-${JSON.stringify(sentimentResult)}`
+    : isTopic
+      ? `topic-${JSON.stringify(topicResult.groups)}`
+      : "static";
 
   // Initialize main results DataTable on mount or when dependencies change.
   useEffect(() => {
@@ -504,27 +569,26 @@ function Data() {
     });
   }, []);
 
-
   const runTopicClustering = async () => {
     // build this freshly every time
     const options = [
       includeSubmissions && "reddit_submissions",
-      includeComments    && "reddit_comments"
+      includeComments && "reddit_comments"
     ].filter(Boolean).join(",");
-  
+
     setLoadingTopic(true);
     setError(null);
     setSentimentResult(null);    // ← clear old sentiment
-  
+
     try {
       const response = await fetch("/api/run_topic", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subreddit,
-          option:    options,
+          option: options,
           startDate: startDate.toISOString(),
-          endDate:   endDate.toISOString()
+          endDate: endDate.toISOString()
         })
       });
       if (!response.ok) throw new Error("Topic clustering failed.");
@@ -537,13 +601,12 @@ function Data() {
       setLoadingTopic(false);
     }
   };
-  
-  
+
   const runSentimentAnalysis = async () => {
     if (!topicResult) return;
     setLoadingSentiment(true);
     setError(null);
-  
+
     try {
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
@@ -551,15 +614,15 @@ function Data() {
         body: JSON.stringify({ topic_result: topicResult })
       });
       if (!response.ok) throw new Error("Sentiment analysis failed.");
-  
+
       const { result } = await response.json();
       console.log("raw RPC result:", result);
-  
+
       // ⬇️ pull out exactly the array you need
       const sentimentArray = Array.isArray(result)
         ? result
         : result.sentiment || [];
-  
+
       setSentimentResult(sentimentArray);
       // setTopicResult(null);
       handleNotify("Sentiment Analysis complete!");
@@ -569,9 +632,6 @@ function Data() {
       setLoadingSentiment(false);
     }
   };
-  
-  
-  
 
   useEffect(() => {
     if (clusteringResults) {
@@ -641,72 +701,11 @@ function Data() {
     setSubreddit(e.target.value);
   }
 
-  let dynamicChartData, dynamicChartOptions;
-
-  if (clusteringResults && clusteringResults.sentiment && Array.isArray(clusteringResults.sentiment)) {
-    const sentimentArray = clusteringResults.sentiment;
-    const dynamicLabels = sentimentArray.map(result => `Topic ${result.topic}`);
-    const dynamicData = sentimentArray.map(result => result.score);
-    // Use the getBarColor function to compute colors based on the amplified score.
-    const dynamicBackgroundColors = sentimentArray.map(result => getBarColor(result.score).background);
-    const dynamicBorderColors = sentimentArray.map(result => getBarColor(result.score).border);
-
-
-    dynamicChartData = {
-      labels: dynamicLabels,
-      datasets: [{
-        label: 'Sentiment Score',
-        data: dynamicData,
-        backgroundColor: dynamicBackgroundColors,
-        borderColor: dynamicBorderColors,
-        borderWidth: 1
-      }]
-    };
-
-    dynamicChartOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        y: {
-          beginAtZero: true,
-          title: { display: true, text: 'Sentiment Score' }
-        },
-        x: {
-          title: { display: true, text: 'Topic' }
-        }
-      },
-      plugins: {
-        title: { display: true, text: 'Topic Sentiment Analysis' },
-        legend: { position: 'bottom' }
-      }
-    };
-  }
-
-      
-    // figure out which chart we actually want to show
-    const isSentiment = Array.isArray(sentimentResult);
-    const isTopic     = !isSentiment && Array.isArray(topicResult?.groups);
-
-    const chartData = isSentiment
-      ? sentimentChartData
-      : isTopic
-        ? topicChartData
-        : staticChartData;
-
-    const chartOptions = isSentiment
-      ? sentimentChartOptions
-      : isTopic
-        ? topicChartOptions
-        : staticChartOptions;
-
-    // change this key any time the underlying data changes
-    const chartKey = isSentiment
-      ? `sent-${JSON.stringify(sentimentResult)}`
-      : isTopic
-        ? `topic-${JSON.stringify(topicResult.groups)}`
-        : "static";
-
-
+  useEffect(() => {
+    if (clusteringResults?.sentiment) {
+      console.log("Sentiment Structure Check:", clusteringResults.sentiment);
+    }
+  }, [clusteringResults]);
 
   return (
     <div className="container mt-5">
@@ -883,8 +882,6 @@ function Data() {
               </button>
             )}
           </div>
-
-
 
           <ToastContainer />
 
