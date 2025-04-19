@@ -39,31 +39,36 @@ def load_dataframe(meta):
         raise Exception(f"Error fetching data from API: {e}")
 
     print('done fetching from clickhouse')
-    
+   
     df = df.rename(columns={"selftext": "body"})
     df = df.fillna("")
     return df
 
 def preproccess_termed_sentiment_data(df, groups):
-    all_group_terms = []  # List of term lists
+    all_terms = []
     all_sectioned_bodies = []
+    all_topics = []
 
     for group in groups:
         for topic in group["topics"]:
+            topic_num = topic["topicNumber"]
             keywords = topic["ctfidfKeywords"]
             terms = [kw.strip() for kw in keywords.split(",")]
-            all_group_terms.append(terms)
 
-            # Filter posts by keywords
-            term_bodies = {term: [] for term in terms}
-            for body in df["body"]:
-                lower_body = body.lower()
-                for term in terms:
-                    if term in lower_body:
-                        term_bodies[term].append(body)
+            for term in terms:
+                matched_bodies = [
+                    body for body in df["body"]
+                    if term in body.lower()
+                ]
+                # print("Term: ", term)
+                # print("Matched Body: ", matched_bodies)
 
-            sectioned_bodies = [term_bodies[term] for term in terms]
-            all_sectioned_bodies.append((terms, sectioned_bodies))
+                if matched_bodies:
+                    all_terms.append(term)
+                    all_sectioned_bodies.extend(matched_bodies)
+                    # print("Current All Section: ", all_sectioned_bodies)
+                    all_topics.append(topic_num)
+
     return all_sectioned_bodies
 
 def main():
@@ -74,15 +79,12 @@ def main():
     meta = grouping_data["meta"]
     groups = grouping_data["groups"]
 
-    # Load the data from an external API and convert to DataFrame
     df = load_dataframe(meta)
-    # Preprocess the data to group texts by keywords
-    all_sectioned_bodies = preproccess_sentiment_data(df, groups)
+    terms, sectioned_bodies, topics = preproccess_termed_sentiment_data(df, groups)
+    stats = run_roberta_analysis(terms, sectioned_bodies, topics=topics)
 
-    # For each group of texts, run sentiment analysis using the RoBERTa pipeline
-    for terms, sectioned_bodies in all_sectioned_bodies:
-        stats = run_roberta_analysis(terms, sectioned_bodies)
-        print(stats)
+    print(json.dumps(stats, indent=2))
 
 if __name__ == '__main__':
     main()
+

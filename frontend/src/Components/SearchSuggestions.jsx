@@ -90,7 +90,7 @@ const SearchSuggestions = ({ subreddit, setSubreddit, getSubredditIcon, isTyping
                 </div>
             )}
 
-            {!suggestions.length && !suggestionLoading && isTyping && !dataLoadMessage && (
+            {!suggestions.length && !suggestionLoading && isTyping && !dataLoadMessage && subreddit.length > 0 && (
                 <div className="text-danger mt-2">No subreddits match the search.</div>
             )}
         </>
