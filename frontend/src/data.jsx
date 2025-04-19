@@ -549,19 +549,38 @@ function Data() {
   };
 
   useEffect(() => {
-    // Automatically run the search on page load. Adjust to only fetch data and not add to search history.
     const searchValue = `${subreddit} ${startDate.toISOString()} ${endDate.toISOString()}`;
-    fetchArrowData(0, 10, 1, searchValue, setError).then(() => {
-      tableInitializedRef.current = true;
-      if ($.fn.DataTable.isDataTable("#click-table")) {
-        $("#click-table").DataTable().ajax.reload();
-      }
-      if (subreddit) {
-        getSubredditIcon(subreddit);
-      }
-    }).catch((error) => {
-      console.error("Error fetching data for main datatables:", error);
-    });
+
+    // Run fetchArrowData immediately
+    fetchArrowData(0, 10, 1, searchValue, setError)
+      .then(() => {
+        tableInitializedRef.current = true;
+        if ($.fn.DataTable.isDataTable("#click-table")) {
+          $("#click-table").DataTable().ajax.reload();
+        }
+        if (subreddit) {
+          getSubredditIcon(subreddit);
+        }
+      })
+      .catch((error) => {
+        console.error("Error fetching data for main datatables:", error);
+      });
+
+    // Check if SuggestionsModel is empty and populate if needed
+    // For future updates either removes this check or drop the table and rebuild
+    fetch('/api/check_list')
+      .then(res => res.json())
+      .then(data => {
+        if (data.empty) {
+          console.log('Populatating Suggestions List');
+          return fetch('/api/create_list');
+        }
+        //console.log('List already populated');
+      })
+      .catch((error) => {
+        console.error("Error populating suggestions list:", error);
+      });
+
   }, []);
 
   const runTopicClustering = async () => {
