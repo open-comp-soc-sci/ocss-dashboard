@@ -11,8 +11,10 @@ import 'datatables.net-bs5';
 
 import 'datatables.net';
 import 'datatables.net-buttons';
-import JSZip from 'jszip';
-import pdfMake from 'pdfmake';
+
+import 'datatables.net-bs5/css/dataTables.bootstrap5.min.css';
+
+
 import * as Arrow from 'apache-arrow';
 import 'pdfmake/build/vfs_fonts.js';
 import 'datatables.net-buttons/js/buttons.html5.min';
@@ -927,7 +929,7 @@ function Data() {
       {/* Main Results DataTable */}
       <div className="mt-5">
         <div className="mt-4 text-left d-flex">
-          <h2>Results for r/{subreddit}</h2>
+          <h2>Raw Data for r/{subreddit}</h2>
           {subredditIcon && (
             <img
               src={subredditIcon}
