@@ -13,6 +13,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY printClusters.py /app/
 COPY readReddit.py /app/
-COPY roberta.py /app/
+COPY nli_aspect.py /app/
 
 CMD ["python3", "-u", "sentiment_analysis_consumer.py"]
