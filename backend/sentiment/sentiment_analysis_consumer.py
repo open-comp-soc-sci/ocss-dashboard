@@ -78,49 +78,54 @@ def keywords_sentiment(df, topics, all_sectioned_bodies):
     return sentiment_stats
 
 def callback(ch, method, properties, body):
-    # print("Received message:", body)
     try:
-        # Parse the JSON message.
+        # 1) Parse the full topic‑clustering payload
         grouping_data = json.loads(body)
-        meta = grouping_data["meta"]
-        groups = grouping_data["groups"]
+        meta   = grouping_data.get("meta")
+        groups = grouping_data.get("groups", [])
     except Exception as e:
         print("Error decoding JSON:", e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
     try:
+        # 2) Load your DataFrame from the meta info
         df = load_dataframe(meta)
-        if termed:
-            all_sectioned_bodies = preproccess_termed_sentiment_data(df, groups)
-            #print("All sectioned bodies: ", all_sectioned_bodies)
-            if "groups" in grouping_data:
-                all_topics = []
 
-            for group in grouping_data["groups"]:
+        # 3) Build a flat list of all topic dicts
+        if termed:
+            # Prepare bodies by topic if you need them
+            all_sectioned_bodies = preproccess_termed_sentiment_data(df, groups)
+            # Now pull out every topic from every group
+            all_topics = []
+            for group in groups:
                 all_topics.extend(group.get("topics", []))
+            # 4) Run your per‑keyword sentiment
             sentiment_stats = keywords_sentiment(df, all_topics, all_sectioned_bodies)
+
         else:
-            sentiment_stats = run_topic_roberta_analysis(df, grouping_data["allTopics"])
-            
-  
+            # If you decided to do topic‑level sentiment instead
+            all_topics = [t for g in groups for t in g.get("topics", [])]
+            sentiment_stats = run_topic_roberta_analysis(df, all_topics)
+
         print("Sentiment Analysis complete:", sentiment_stats)
 
+        # 5) Reply with the original groups + your new sentiment array
         result_message = {
-            "groups": groups,
+            "groups":    groups,
             "sentiment": sentiment_stats
         }
-        # Publish the reply to the callback queue specified in properties.reply_to
-        response_body = json.dumps(result_message)
         ch.basic_publish(
             exchange='',
-            routing_key=properties.reply_to,  # send reply to the callback queue
+            routing_key=properties.reply_to,
             properties=pika.BasicProperties(correlation_id=properties.correlation_id),
-            body=response_body
+            body=json.dumps(result_message)
         )
+
     except Exception as e:
-        print("Error running topic model:", e)
-        print("Traceback:", traceback.format_exc())
+        print("Error running sentiment analysis:", e)
+        print(traceback.format_exc())
+
     finally:
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -128,21 +133,6 @@ print(" [*] Waiting for Sentiment Analysis message. To exit press CTRL+C")
 channel.basic_qos(prefetch_count=1)
 channel.basic_consume(queue=queue_name, on_message_callback=callback)
 channel.start_consuming()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
