@@ -10,6 +10,9 @@ import pika
 from . import clickHouse_BP
 from ..rpc_client import TopicModelRpcClient  # Import the RPC client modules
 from ..rpc_client import SentimentAnalysisRpcClient 
+from app.models import SuggestionsModel
+from app.extensions import db
+from sqlalchemy.exc import IntegrityError
 
 import csv
 import io
@@ -51,20 +54,51 @@ def release_client(client):
 
 @clickHouse_BP.route('/api/search_list', methods=['GET'])
 def search_list():
-    client = None
     try:
         subreddit = request.args.get('subreddit', '')
-        
-        subreddit_query = f"""
-        SELECT DISTINCT subreddit FROM (
-            SELECT subreddit FROM reddit_submissions
-            UNION ALL
-            SELECT subreddit FROM reddit_comments
+
+        # USING ILIKE ON POSTGRES
+        results = (
+            SuggestionsModel.query
+            .filter(SuggestionsModel.subreddit.ilike(f"{subreddit}%"))
+            .order_by(SuggestionsModel.counts.desc())
+            .limit(10)
+            .all()
         )
-        WHERE subreddit ILIKE '%{subreddit}%'
-        GROUP BY subreddit
-        ORDER BY COUNT(*) DESC
-        LIMIT 10
+
+        subreddit_list = [row.subreddit for row in results]
+        print("results", subreddit_list)
+
+        return jsonify(subreddit_list)
+
+    except Exception as e:
+        print(f"Error in search_list: {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@clickHouse_BP.route('/api/check_list', methods=['GET'])
+def check_list():
+    is_empty = SuggestionsModel.query.first() is None
+    return jsonify({'empty': is_empty}), 200
+
+@clickHouse_BP.route('/api/create_list', methods=['GET'])
+def create_list():
+    import time
+    start_time = time.time()
+    print("Create List Started")
+
+    client = None
+    try:
+        # Check if SuggestionsModel is empty
+        is_empty = db.session.query(SuggestionsModel.id).first() is None
+
+        subreddit_query = """
+            SELECT subreddit, COUNT(*) AS counts FROM (
+                SELECT subreddit FROM reddit_submissions
+                UNION ALL
+                SELECT subreddit FROM reddit_comments
+            )
+            GROUP BY subreddit
         """
 
         client = get_pooled_client()
@@ -72,18 +106,48 @@ def search_list():
             return jsonify({"error": "Failed to get ClickHouse client."}), 500
 
         result = client.query_arrow(subreddit_query)
-
         if not result:
             return jsonify({"message": "No subreddits found.", "subreddits": []}), 200
 
-        subreddit_list = result.column('subreddit').to_pylist()
-        print("results", subreddit_list)
-        return jsonify(subreddit_list)
-    
+        subreddits = result.to_pydict()
+
+        if is_empty:
+            # For now insert everything
+            new_entries = [
+                SuggestionsModel(subreddit=name, counts=count)
+                for name, count in zip(subreddits['subreddit'], subreddits['counts'])
+            ]
+            db.session.bulk_save_objects(new_entries)
+        else:
+            # For future updates check existing and update or insert
+            existing_subreddits = set(
+                row.subreddit for row in SuggestionsModel.query.with_entities(SuggestionsModel.subreddit).all()
+            )
+
+            new_entries = []
+            update_map = {}
+
+            for name, count in zip(subreddits['subreddit'], subreddits['counts']):
+                if name in existing_subreddits:
+                    update_map[name] = count
+                else:
+                    new_entries.append(SuggestionsModel(subreddit=name, counts=count))
+
+            if new_entries:
+                db.session.bulk_save_objects(new_entries)
+
+            for subreddit, count in update_map.items():
+                SuggestionsModel.query.filter_by(subreddit=subreddit).update({'counts': count})
+
+        db.session.commit()
+
+        print(f"Finished create_list in {time.time() - start_time:.2f} seconds")
+        return jsonify({"message": "Suggestions saved successfully."}), 200
+
     except Exception as e:
-        print(f"Error in search_list: {e}", flush=True)
+        print(f"Error in create_list: {e}", flush=True)
         return jsonify({"error": str(e)}), 500
-    
+
     finally:
         release_client(client)
 
