@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ToastContainer } from 'react-toastify';
-import { PointElement, LineElement, BarElement } from 'chart.js';
-import { Chart as ChartJS, CategoryScale, LinearScale, Tooltip, Title, Legend } from 'chart.js';
+
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+
 import { Bar } from 'react-chartjs-2';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -20,8 +21,21 @@ import TopicTablesContainer from './Components/TopicTablesContainer';
 import handleNotify from './Components/Toast';
 import SearchSuggestions from './Components/SearchSuggestions';
 import SearchHistory from './Components/SearchHistory';
+import { FirstKeywordSentimentChart, WeightedSentimentChart } from './Components/ChartComponents';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
 
 function Data() {
   // Main Search Components
@@ -181,7 +195,7 @@ function Data() {
     '201, 203, 207'
   ];
 
-  const staticLabels = ["January", "February", "March", "April", "May", "June", "July"];
+  const staticLabels = ["#1", "#2", "#3", "#4", "#5", "#6", "#7"];
   const staticBackgroundColors = staticLabels.map((_, index) => getBackgroundColor(index));
   const staticBorderColors = staticLabels.map((_, index) => getBorderColor(index));
 
@@ -214,13 +228,13 @@ function Data() {
   }
 
   // 2) sentiment‐chart
-  let sentimentChartData, sentimentChartOptions;
-  if (Array.isArray(sentimentResult)) {
-    const labels = sentimentResult.map(r => `Topic ${r.topic}`);
-    const data = sentimentResult.map(r => r.score);
-    sentimentChartData = { labels, datasets: [{ label: "Sentiment Score", data, backgroundColor: data.map(v => getBarColor(v).background), borderColor: data.map(v => getBarColor(v).border), borderWidth: 1 }] };
-    sentimentChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Score" } }, x: { title: { display: true, text: "Topic" } } }, plugins: { legend: { position: "bottom" } } };
-  }
+  // let sentimentChartData, sentimentChartOptions;
+  // if (Array.isArray(sentimentResult)) {
+  //   const labels = sentimentResult.map(r => `Topic ${r.topic}`);
+  //   const data = sentimentResult.map(r => r.score);
+  //   sentimentChartData = { labels, datasets: [{ label: "Sentiment Score", data, backgroundColor: data.map(v => getBarColor(v).background), borderColor: data.map(v => getBarColor(v).border), borderWidth: 1 }] };
+  //   sentimentChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Score" } }, x: { title: { display: true, text: "Topic" } } }, plugins: { legend: { position: "bottom" } } };
+  // }
 
   let dynamicChartData, dynamicChartOptions;
 
@@ -267,25 +281,6 @@ function Data() {
   // figure out which chart we actually want to show
   const isSentiment = Array.isArray(sentimentResult);
   const isTopic = !isSentiment && Array.isArray(topicResult?.groups);
-
-  const chartData = isSentiment
-    ? sentimentChartData
-    : isTopic
-      ? topicChartData
-      : staticChartData;
-
-  const chartOptions = isSentiment
-    ? sentimentChartOptions
-    : isTopic
-      ? topicChartOptions
-      : staticChartOptions;
-
-  // change this key any time the underlying data changes
-  const chartKey = isSentiment
-    ? `sent-${JSON.stringify(sentimentResult)}`
-    : isTopic
-      ? `topic-${JSON.stringify(topicResult.groups)}`
-      : "static";
 
   // Initialize main results DataTable on mount or when dependencies change.
   useEffect(() => {
@@ -623,6 +618,7 @@ function Data() {
         ? result
         : result.sentiment || [];
 
+      console.log("sentimentArray:", sentimentArray);
       setSentimentResult(sentimentArray);
       // setTopicResult(null);
       handleNotify("Sentiment Analysis complete!");
@@ -835,18 +831,22 @@ function Data() {
           <h2>Sentiment Analysis</h2>
           <p>Posts within the selected date range.</p>
 
-          <div style={{ backgroundColor: '#333', height: '350px', borderRadius: 8, padding: '1rem' }}>
-            <Bar
-              key={chartKey}
-              data={chartData}
-              options={chartOptions}
-            />
+          <div style={{ backgroundColor: '#333', borderRadius: 8, padding: '1rem', marginBottom: '2rem' }}>
+            {Array.isArray(sentimentResult) ? (
+              <>
+                <FirstKeywordSentimentChart sentiment={sentimentResult} />
+                <div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                  <WeightedSentimentChart sentiment={sentimentResult} />
+                </div>
+
+              </>
+            ) : topicResult?.groups ? (
+              <Bar data={topicChartData} options={topicChartOptions} />
+            ) : (
+              <Bar data={staticChartData} options={staticChartOptions} />
+            )}
           </div>
 
-
-
-
-          <button className="btn btn-secondary">Save as PNG</button>
 
           <div className="mt-4">
             {!topicResult ? (
