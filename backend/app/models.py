@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 
+
 Base = declarative_base()
 
 from app.extensions import db
@@ -45,8 +46,15 @@ class TopicData(db.Model):
     result_id = db.Column(db.Integer, db.ForeignKey('resultData.id', ondelete='CASCADE'), nullable=False)
     group_number = db.Column(db.Integer, nullable=False)
     group_label = db.Column(db.String, nullable=False)
-    topics = db.Column(db.JSON, nullable=False) # Should include topic number, topic keywords, post count, and topic label
-    example_posts = db.Column(db.JSON, nullable=True) # Should include topic number and example posts, will they always have an example post?
+    topics = db.Column(db.JSON, nullable=False)
+    example_posts = db.Column(db.JSON, nullable=True)
+
+# Suggestions Model
+class SuggestionsModel(db.Model):
+    __tablename__ = 'suggestionsData'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    subreddit = db.Column(db.String(), nullable=False)
+    counts = db.Column(db.Integer, nullable=False)
     
 # unimplemented RedditData model class. 
 class RedditData(Base):
