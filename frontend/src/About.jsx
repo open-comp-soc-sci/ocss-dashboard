@@ -6,23 +6,6 @@ const About = () => {
             <h1>About This App</h1>
 
             <div>
-                {/* Table of Contents */}
-                <div className="mb-6">
-                    <h2 className="mb-2">Contents</h2>
-                    <p className="p-2">
-                        Note: Only keep if we add more information, don't really think it would be necessary to have if the page is not expanded. Should we also include photos to help? Maybe photos to help describe the chart.
-                    </p>
-                    <ul className="list-disc list-inside text-blue-600">
-                        <li><a href="#search">Subreddit Search</a></li>
-                        <li><a href="#clustering">Topic Clustering</a></li>
-                        <li><a href="#sentiment">Sentiment Analysis</a></li>
-                        <li><a href="#datatable">Result Data Table</a></li>
-                        <li><a href="#export">Data Export</a></li>
-                        <li><a href="#history">Search History</a></li>
-                        <li><a href="#results">Results Page</a></li>
-                    </ul>
-                </div>
-
                 {/* Subreddit Search Section */}
                 <section id="search" className="p-4 rounded shadow">
                     <h2 className="mb-2">
