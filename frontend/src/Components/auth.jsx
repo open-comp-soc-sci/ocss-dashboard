@@ -18,7 +18,7 @@ function SignIn() {
                 window.location.reload();
             })
             .catch((error) => {
-                console.error('Error signing in: ', error.message);
+                console.error('Unfortunately there was an error signing in: ', error.message);
             });
     }
 
