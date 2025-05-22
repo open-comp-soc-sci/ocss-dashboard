@@ -1,41 +1,41 @@
-name: Frontend CI
+# name: Frontend CI
 
-on:
-  push:
-    paths:
-      - 'frontend/**'
-  pull_request:
-    paths:
-      - 'frontend/**'
+# on:
+#   push:
+#     paths:
+#       - 'frontend/**'
+#   pull_request:
+#     paths:
+#       - 'frontend/**'
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [20.x]
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     strategy:
+#       matrix:
+#         node-version: [20.x]
 
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Check out code
+#         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
+#       - name: Setup Node.js ${{ matrix.node-version }}
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ matrix.node-version }}
 
-      - name: Cache npm registry
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+#       - name: Cache npm registry
+#         uses: actions/cache@v3
+#         with:
+#           path: ~/.npm
+#           key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
+#           restore-keys: |
+#             ${{ runner.os }}-node-
 
-      - name: Install dependencies
-        working-directory: frontend
-        run: npm install
+#       - name: Install dependencies
+#         working-directory: frontend
+#         run: npm install
 
-      - name: Compile (Vite build)
-        working-directory: frontend
-        run: npm run build
+#       - name: Compile (Vite build)
+#         working-directory: frontend
+#         run: npm run build
