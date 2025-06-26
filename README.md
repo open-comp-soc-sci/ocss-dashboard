@@ -6,6 +6,14 @@ To enable this accessibility, as a juncture of computer science and social scien
 
 # Getting Started
 
+The configuration of the project currently connects to remote servers.
+These remote servers are currently hardcoded in the source code and use GPUs
+for finding embeddings, connecting to a Reddit database, and sentiment analysis.
+
+Running on a local machine (any development machine, your personal computer for instance which has a GUI and is not headless)
+runs the frontend, backend, database, and adminer. This is done with `make local`.
+
+
 .env
 
 ```

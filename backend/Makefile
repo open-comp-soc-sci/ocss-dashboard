@@ -4,8 +4,9 @@ make:
 	-docker stop ${CONTAINER_NAME}
 	-docker rm ${CONTAINER_NAME}
 	docker build -t ${CONTAINER_NAME} .
-	docker run --name ${CUSTOM_NAME} -d \
+	MSYS_NO_PATHCONV=1 docker run --name ${CONTAINER_NAME} -d \
 		-v "${CURDIR}:/app" \
+		--env-file ../.env \
 		-w /app \
 	${CONTAINER_NAME}
 	# docker logs --follow `docker ps -aqf ancestor=${CONTAINER_NAME} | head -n 1`
