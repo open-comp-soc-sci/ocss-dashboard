@@ -1,5 +1,7 @@
 # ocss-dashboard
 
+**O**pen **C**omputational **S**ocial **S**cience
+
 ![What do people talk about?](frontend/public/whatdopeopletalkabout.svg)
 
 There exists no comprehensive solution to appraise the sentiment of online social media platforms. This is a pressing issue, as the use of these platforms is ubiquitous, especially for members of marginalized communities. Despite endless hours spent using these platforms by everyday users, research of the messages’ contents is not immediately apparent, straightforward, or accessible. Research into the opinions and experiences shared within these communities can offer altruistic opportunities, especially the dissemination of medical outcomes and their success rates.
