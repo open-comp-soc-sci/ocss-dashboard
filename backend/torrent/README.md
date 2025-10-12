@@ -1,6 +1,6 @@
 you may find that p2p activity is not alllowed on school network
 
-we torrented at home and then brought it over driving to campus and connecting a drive from home
+we torrented at home https://academictorrents.com/details/ba051999301b109eab37d16f027b3f49ade2de13 and then brought it over driving to campus and connecting a drive from home
 
 ```bash
 $ du -sh RC_2024-01.zst
