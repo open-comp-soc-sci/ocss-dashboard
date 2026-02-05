@@ -27,6 +27,8 @@ channel.queue_declare(queue=queue_name, durable=True)
 def keywords_sentiment(df, topics):
     sentiment_stats = []
 
+    seen_keywords = set()
+
     for topic in topics:
         topic_num      = topic["topicNumber"]
         keywords_csv   = topic.get("ctfidfKeywords", "")
@@ -39,6 +41,10 @@ def keywords_sentiment(df, topics):
 
         # grab only the first keyword
         first_kw = keywords_csv.split(",")[0].strip()
+        if first_kw in seen_keywords:
+            # keyword already processed, skip it.
+            continue
+        seen_keywords.add(first_kw)
 
         # collect bodies that mention that first keyword
         bodies = [b for b in df["body"] if first_kw.lower() in b.lower()]
