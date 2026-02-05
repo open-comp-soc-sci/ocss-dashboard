@@ -39,7 +39,7 @@ for _ in range(POOL_SIZE):
 
 def get_pooled_client():
     try:
-        return connection_pool.get(timeout=5)  
+        return connection_pool.get(timeout=5)
     except:
         raise Exception("No ClickHouse connections are available.")
 
@@ -55,25 +55,20 @@ def search_list():
     if not prefix:
         return jsonify([])
 
-    # Case-insensitive matching
-    lower_prefix = prefix.lower()
-
     client = None
     try:
         client = get_pooled_client()
-        # Query the dedicated `subreddits` table with case-insensitive prefix match
-        sql = (
-            "SELECT subreddit "
-            "FROM subreddits "
-            f"WHERE lower(subreddit) LIKE '{lower_prefix}%' "
-            "ORDER BY subreddit ASC "
-            "LIMIT 10"
-        )
-        qr = client.query(sql)
-        # Extract rows from QueryResult
-        rows = getattr(qr, 'result_set', None) or getattr(qr, 'rows', None) or qr
-        suggestions = [row[0] for row in rows]
-        return jsonify(suggestions)
+        sql = """
+            SELECT subreddit
+            FROM subreddits
+            WHERE lower(subreddit) LIKE %(prefix)s
+            ORDER BY subreddit ASC
+            LIMIT 10
+        """
+        params = {"prefix": prefix.lower() + "%"}
+        qr = client.query(sql, parameters=params)
+        rows = qr.result_rows
+        return jsonify([row[0] for row in rows])
     except Exception:
         # If table doesn't exist or any error, return empty list
         return jsonify([])
@@ -98,64 +93,57 @@ def get_arrow():
             return jsonify({"error": "Data option was not selected."}), 400
 
         if ',' in option:
-            # If both options are selected, use a UNION ALL query.
-            base_query = (
-                "SELECT * FROM ("
-                "    (SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions) "
-                "    UNION ALL "
-                "    (SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
-                ") AS combined"
-            )
+            base_query = """
+                SELECT * FROM (
+                    SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions
+                    UNION ALL
+                    SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments
+                ) AS combined
+            """
         elif option == "reddit_submissions":
-            base_query = "SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions"
-        elif option == "reddit_comments":
-            base_query = "SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
-        # Fix to prevent error to console
+            base_query = """
+                SELECT subreddit, author, title, selftext, created_utc, id FROM reddit_submissions
+            """
+        else:
+            base_query = """
+                SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments
+            """
 
-        conditions = []
+        conditions = ["author != 'AutoModerator'"]
+        params = {}
+
         if subreddit:
-            conditions.append(f"subreddit = '{subreddit}'")
-        if start_date:
-            start_date_formatted = start_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
-        if end_date:
-            end_date_formatted = end_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
-        if search_value:
-            conditions.append(f"selftext LIKE '%{search_value}%'")
+            conditions.append("subreddit = %(subreddit)s")
+            params["subreddit"] = subreddit
 
-        # Add condition to filter out posts by AutoModerator.
-        conditions.append("author != 'AutoModerator'")
-        
+        if search_value:
+            conditions.append("selftext LIKE %(search)s")
+            params["search"] = f"%{search_value}%"
+
+        if start_date:
+            conditions.append("created_utc >= toDateTime64(%(start)s, 3)")
+            params["start"] = start_date.replace("T", " ").split(".")[0]
+
+        if end_date:
+            conditions.append("created_utc <= toDateTime64(%(end)s, 3)")
+            params["end"] = end_date.replace("T", " ").split(".")[0]
+
         query = base_query
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY created_utc DESC"
-        query += " LIMIT 9999999999999 OFFSET 0"
-        
+        query += " ORDER BY created_utc DESC LIMIT 9999999999999 OFFSET 0"
+
+
         client = get_pooled_client()
         if client is None:
-            return jsonify({"error": "Failed to get ClickHouse client."}), 500
+            return jsonify({"error": "Failed to get ClickHouse client."}), 50
 
-        
         # Use query_arrow to get an Arrow Table directly.
         start_time = time.time()
-        table = client.query_arrow(query, use_strings=True)
+        table = client.query_arrow(query, parameters=params, use_strings=True)
         query_arrow_time = time.time() - start_time
         print(f"Query Arrow time: {query_arrow_time:.4f} seconds", flush=True)
 
-        # Return empty Arrow stream
-        if table.num_rows == 0:
-            stream = io.BytesIO()
-            with ipc.new_stream(stream, table.schema) as writer:
-                writer.write_table(table)
-            stream.seek(0)
-            return Response(
-                stream.getvalue(), 
-                mimetype='application/vnd.apache.arrow.stream',
-                headers={"Content-Disposition": "attachment; filename=data.arrow"}
-            )
-        
         # Serialize the Arrow Table into a binary stream.
         start_time = time.time()
         stream = io.BytesIO()
@@ -163,65 +151,27 @@ def get_arrow():
             writer.write_table(table)
         serialization_time = time.time() - start_time
         print(f"Arrow serialization time: {serialization_time:.4f} seconds", flush=True)
-        
-        total_time = query_arrow_time + serialization_time
-        print(f"Total Arrow processing time: {total_time:.4f} seconds", flush=True)
-        
+
         stream.seek(0)
+
         return Response(
-            stream.getvalue(), 
+            stream.getvalue(),
             mimetype='application/vnd.apache.arrow.stream',
             headers={"Content-Disposition": "attachment; filename=data.arrow"}
         )
-    
+
     except Exception as e:
-        print(f"Error in get_arrow: {e}", flush=True)
         return jsonify({"error": str(e)}), 500
-    
     finally:
         release_client(client)
-
-@clickHouse_BP.route("/api/run_topic", methods=["POST"])
-def run_topic():
-    try:
-        # Retrieve parameters from the POST body.
-        request_data = request.get_json() or {}
-        parameters = {
-            "data_source": request_data.get("data_source", "api"),
-            "subreddit": request_data.get("subreddit", ""),
-            "option": request_data.get("option", "reddit_submissions"),
-            "startDate": request_data.get("startDate", ""),
-            "endDate": request_data.get("endDate", "")
-        }
-        message = json.dumps(parameters)
-        
-        # Instantiate the TopicModelRpcClient.
-        topic_rpc_client = TopicModelRpcClient()
-        
-        # Call the topic modeling RPC client and capture the result.
-        result = topic_rpc_client.call(message)
-        
-        # Return the topic clustering result directly to the frontend.
-        return jsonify({"result": json.loads(result)}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
-def run_sentiment():
-    topic_result = request.get_json().get("topic_result")
-    # just forward the full thing:
-    message = json.dumps(topic_result)
-    result = SentimentAnalysisRpcClient().call(message)
-    return jsonify({"result": json.loads(result)}), 200
 
 
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
 def export_data():
+    client = None
     try:
         option = request.args.get('option', default='reddit_submissions')
         subreddit = request.args.get('subreddit', '', type=str)
-        # subreddit = subreddit.lower()
         # Read our search parameter from a simpler key.
         search_value = request.args.get('search_value', '', type=str)
         start_date = request.args.get('startDate', None, type=str)
@@ -230,33 +180,36 @@ def export_data():
 
 
         if ',' in option:
-            # If both options are selected, use a UNION ALL query.
-            base_query = (
-                "SELECT * FROM ("
-                "    (SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions) "
-                "    UNION ALL "
-                "    (SELECT subreddit, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments)"
-                ") AS combined"
-            )
+            base_query = """
+                SELECT * FROM (
+                    SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions
+                    UNION ALL
+                    SELECT subreddit, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments
+                ) AS combined
+            """
         elif option == "reddit_submissions":
             base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
-        elif option == "reddit_comments":
+        else:
             base_query = "SELECT subreddit, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
 
-        else:
-            return jsonify({"error": "Invalid option provided."}), 400
         conditions = []
+        params = {}
+
         if subreddit:
-            conditions.append(f"subreddit = '{subreddit}'")
-        # Use search_value to filter by the body/selftext column.
+            conditions.append("subreddit = %(subreddit)s")
+            params["subreddit"] = subreddit
+
         if search_value:
-            conditions.append(f"selftext LIKE '%{search_value}%'")
+            conditions.append("selftext LIKE %(search)s")
+            params["search"] = f"%{search_value}%"
+
         if start_date:
-            start_date_formatted = start_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
+            conditions.append("created_utc >= toDateTime64(%(start)s, 3)")
+            params["start"] = start_date.replace("T", " ").split(".")[0]
+
         if end_date:
-            end_date_formatted = end_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
+            conditions.append("created_utc <= toDateTime64(%(end)s, 3)")
+            params["end"] = end_date.replace("T", " ").split(".")[0]
 
         query = base_query
         if conditions:
@@ -264,7 +217,7 @@ def export_data():
         query += " ORDER BY created_utc DESC"
 
         client = get_pooled_client()
-        table = client.query_arrow(query, use_strings=True)
+        table = client.query_arrow(query, parameters=params, use_strings=True)
 
         # Process different export formats...
         if export_format == 'excel':
@@ -305,7 +258,7 @@ def export_data():
                 writer.write_table(table)
             stream.seek(0)
             return Response(
-                stream.getvalue(), 
+                stream.getvalue(),
                 mimetype='application/vnd.apache.arrow.stream',
                 headers={"Content-Disposition": "attachment; filename=data.arrow"}
             )
