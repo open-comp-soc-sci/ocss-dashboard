@@ -835,6 +835,11 @@ class GroupLabeling():
                 keywords_str = ", ".join(word for word, weight in topic_keywords_tuples)
 
                 topic_post_count = post_counts.get(topic_index, 0)
+
+                # skip topics with only one post, should not have own cluster
+                if topic_post_count <= 1:
+                    continue
+
                 group_post_count += topic_post_count
 
                 # Use the stored representative document from the topic_labeler
@@ -849,8 +854,11 @@ class GroupLabeling():
                     "samplePosts": sample_posts_str
                 }
                 group_listing["topics"].append(topic_item)
-            group_listing["postCount"] = group_post_count
-            grouped_results.append(group_listing)
+
+            # only keep groups with at least one topic
+            if group_listing["topics"]:
+                group_listing["postCount"] = group_post_count
+                grouped_results.append(group_listing)
                 # Combine meta-data and grouping results into a single dictionary.
         message_data = {
             "meta": meta_data,
