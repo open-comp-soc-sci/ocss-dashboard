@@ -7,6 +7,7 @@ from app.extensions import db
 from app.clickHouse import clickHouse_BP
 from app.pullReddit import pullReddit_BP
 from app.searchHistory import searchHistory_BP
+from app.progress_consumer import run_progress_consumer
 
 def create_app():
     app = Flask(__name__)
@@ -23,4 +24,7 @@ def create_app():
     app.register_blueprint(pullReddit_BP)
     app.register_blueprint(searchHistory_BP)
     
+    # listen for progress messages    
+    run_progress_consumer()
+
     return app

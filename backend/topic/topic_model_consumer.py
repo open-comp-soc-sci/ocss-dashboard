@@ -39,6 +39,8 @@ def callback(ch, method, properties, body):
     config_copy = copy.deepcopy(base_config)
 
     # Update the configuration with any parameters provided in the message.
+    if "job_id" in data:
+        config_copy["job_id"] = data["job_id"]
     if "data_source" in data:
         config_copy["data_source"] = data["data_source"]
     if "subreddit" in data:
@@ -65,10 +67,14 @@ def callback(ch, method, properties, body):
         response_body = json.dumps(result_message)
         ch.basic_publish(
             exchange='',
-            routing_key=properties.reply_to,  # send reply to the callback queue
-            properties=pika.BasicProperties(correlation_id=properties.correlation_id),
+            routing_key='topic_results_queue', # send teh data to the results queue
+            properties=pika.BasicProperties(
+                correlation_id=data["job_id"], # get the generated job id
+                delivery_mode=2
+            ),
             body=response_body
         )
+
     except Exception as e:
         print("Error running topic model:", e)
         print("Traceback:", traceback.format_exc())

@@ -9,7 +9,9 @@ from . import clickHouse_BP
 from ..rpc_client import TopicModelRpcClient  # Import the RPC client modules
 from ..rpc_client import SentimentAnalysisRpcClient 
 from app.extensions import db
-
+import uuid
+from app.progress_consumer import progress_store
+from app.progress_consumer import result_store
 
 import io
 import pandas as pd
@@ -186,25 +188,56 @@ def run_topic():
     try:
         # Retrieve parameters from the POST body.
         request_data = request.get_json() or {}
+
+        # generate job id to track progress on the frontend
+        job_id = str(uuid.uuid4())
+
         parameters = {
+            "job_id": job_id,
             "data_source": request_data.get("data_source", "api"),
             "subreddit": request_data.get("subreddit", ""),
             "option": request_data.get("option", "reddit_submissions"),
             "startDate": request_data.get("startDate", ""),
-            "endDate": request_data.get("endDate", "")
+            "endDate": request_data.get("endDate", ""),
         }
         message = json.dumps(parameters)
         
         # Instantiate the TopicModelRpcClient.
         topic_rpc_client = TopicModelRpcClient()
         
-        # Call the topic modeling RPC client and capture the result.
-        result = topic_rpc_client.call(message)
+        # Send the data to the RPC Client
+        topic_rpc_client.send_job(message, job_id)
         
         # Return the topic clustering result directly to the frontend.
-        return jsonify({"result": json.loads(result)}), 200
+        return jsonify({
+            "job_id": job_id
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@clickHouse_BP.route("/api/get_topic/<job_id>")
+def get_topic(job_id):
+    result = result_store.get(job_id)
+
+    if not result:
+        return jsonify({"status": "processing"}), 202
+
+    return jsonify({
+        "result": result
+    })
+
+
+@clickHouse_BP.route("/api/progress/<job_id>")
+def get_progress(job_id):
+    # return progress for Job ID or error if it doesn't exist
+    progress: dict | None = progress_store.get(job_id, None)
+
+    if progress is None:
+        return jsonify({"error": "Job ID does not exist"}), 400
+
+    return jsonify(progress)
 
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
