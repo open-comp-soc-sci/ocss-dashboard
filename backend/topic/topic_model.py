@@ -99,14 +99,28 @@ class TopicModeling():
         self.config = config
 
     def run(self):
+        self.publish_progress("load_data_frame", "Fetching data from ClickHouse", 1/7)
         self.load_data_frame()
+
+        self.publish_progress("find_topics", "Finding topic clusters", 2/7)
         self.find_topics()
+
+        self.publish_progress("label_topics", "Generating topic labels", 3/7)
         self.label_topics()
+
+        self.publish_progress("find_groups", "Grouping similar topics", 4/7)
         self.find_groups()
+
+        self.publish_progress("label_groups", "Generating group labels", 5/7)
         self.label_groups()
+
         # self.send_groups()
         # self.plot_topics()
+
+        self.publish_progress("create_topic_table", "Preparing final results", 6/7)
         self.create_topic_table()
+
+        self.publish_progress("done", "Topic modeling complete", 7/7)
 
         
     def load_data_frame(self):
@@ -287,6 +301,36 @@ class TopicModeling():
 
     def label_topics(self):
         self.topic_labeler = TopicLabeling(self.df, self.topics, self.embeddings, self.topic_model, self.config)
+
+
+    def publish_progress(self, stage, message, percent=None):
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(
+                host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
+                credentials=pika.PlainCredentials(
+                    os.getenv("RABBITMQ_USER", "user"),
+                    os.getenv("RABBITMQ_PASS", "password")
+                )
+            )
+        )
+        channel = connection.channel()
+        channel.queue_declare(queue="topic_progress_queue", durable=True)
+
+        progress_message = {
+            "job_id": self.config.get("job_id"),
+            "stage": stage,
+            "message": message,
+            "percent": percent
+        }
+
+        channel.basic_publish(
+            exchange="",
+            routing_key="topic_progress_queue",
+            body=json.dumps(progress_message),
+            properties=pika.BasicProperties(delivery_mode=2)
+        )
+
+        connection.close()
 
 
     def find_groups(self):
