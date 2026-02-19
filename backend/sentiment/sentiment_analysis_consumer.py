@@ -25,21 +25,19 @@ queue_name = 'sentiment_analysis_queue'
 channel.queue_declare(queue=queue_name, durable=True)
 
 
-def publish_progress(self, stage, message, percent):
+def publish_progress(job_id, stage, message, percent):
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
-            host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
-            credentials=pika.PlainCredentials(
-                os.getenv("RABBITMQ_USER", "user"),
-                os.getenv("RABBITMQ_PASS", "password")
-            )
+            host=rabbitmq_host,
+            port=rabbitmq_port,
+            credentials=credentials
         )
     )
     channel = connection.channel()
     channel.queue_declare(queue="progress_queue", durable=True)
 
     progress_message = {
-        "job_id": self.config.get("job_id"),
+        "job_id": job_id,
         "stage": stage,
         "message": message,
         "percent": percent
@@ -53,6 +51,29 @@ def publish_progress(self, stage, message, percent):
     )
 
     connection.close()
+
+
+def publish_results(job_id, reply):
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host=rabbitmq_host,
+            port=rabbitmq_port,
+            credentials=credentials
+        )
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue="results_queue", durable=True)
+    channel.basic_publish(
+        exchange='',
+        routing_key="results_queue",
+        body=json.dumps(reply),
+        properties=pika.BasicProperties(
+            delivery_mode=2,
+            correlation_id=job_id
+        )
+    )
+    connection.close()
+
 
 
 def keywords_sentiment(df, topics, job_id):
@@ -87,7 +108,7 @@ def keywords_sentiment(df, topics, job_id):
         publish_progress(
             job_id=job_id,
             stage="analyzing_keyword",
-            message=f"Topic {topic_num}: analyzing keyword '{first_kw}'",
+            message=f"Topic {idx+1}/{total_topics}: analyzing keyword '{first_kw}'",
             percent=progress_percent
         )
 
@@ -134,15 +155,7 @@ def callback(ch, method, properties, body):
 
         # publish results
         reply = {"groups":groups, "sentiment":sentiment}
-        ch.basic_publish(
-            exchange='',
-            routing_key="results_queue",
-            body=json.dumps(reply),
-            properties=pika.BasicProperties(
-                delivery_mode=2,
-                correlation_id=job_id
-            )
-        )
+        publish_results(job_id, reply)
 
         # signal that it finished
         publish_progress(job_id, "done", "Sentiment analysis complete", 1.0)
