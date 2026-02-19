@@ -11,3 +11,4 @@ package-lock.json
 cert.pem
 key.pem
 ocss_myenv/
+frontend/dist/

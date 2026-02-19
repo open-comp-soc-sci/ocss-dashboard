@@ -24,12 +24,44 @@ channel = connection.channel()
 queue_name = 'sentiment_analysis_queue'
 channel.queue_declare(queue=queue_name, durable=True)
 
-def keywords_sentiment(df, topics):
+
+def publish_progress(self, stage, message, percent):
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
+            credentials=pika.PlainCredentials(
+                os.getenv("RABBITMQ_USER", "user"),
+                os.getenv("RABBITMQ_PASS", "password")
+            )
+        )
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue="progress_queue", durable=True)
+
+    progress_message = {
+        "job_id": self.config.get("job_id"),
+        "stage": stage,
+        "message": message,
+        "percent": percent
+    }
+
+    channel.basic_publish(
+        exchange="",
+        routing_key="progress_queue",
+        body=json.dumps(progress_message),
+        properties=pika.BasicProperties(delivery_mode=2)
+    )
+
+    connection.close()
+
+
+def keywords_sentiment(df, topics, job_id):
     sentiment_stats = []
 
     seen_keywords = set()
+    total_topics = len(topics)
 
-    for topic in topics:
+    for idx, topic in enumerate(topics):
         topic_num      = topic["topicNumber"]
         keywords_csv   = topic.get("ctfidfKeywords", "")
         if not keywords_csv:
@@ -49,6 +81,15 @@ def keywords_sentiment(df, topics):
         # collect bodies that mention that first keyword
         bodies = [b for b in df["body"] if first_kw.lower() in b.lower()]
         bodies = list(dict.fromkeys(bodies))[:1000]
+        
+        # Publish progress
+        progress_percent = (idx / total_topics)
+        publish_progress(
+            job_id=job_id,
+            stage="analyzing_keyword",
+            message=f"Topic {topic_num}: analyzing keyword '{first_kw}'",
+            percent=progress_percent
+        )
 
         print(f"[NLI] Topic {topic_num}: analyzing first keyword “{first_kw}”")
         stats = run_nli_aspect_analysis(
@@ -77,27 +118,39 @@ def callback(ch, method, properties, body):
         grouping = json.loads(body)
         meta     = grouping.get("meta",{})
         groups   = grouping.get("groups",[])
+        job_id   = grouping["job_id"]
     except Exception as e:
         print("Invalid JSON:", e)
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
+    
+    publish_progress(job_id, "started", "Starting sentiment analysis", 0.0)
 
     try:
         df = load_dataframe(meta)
         # flatten out all topics
         all_topics = [t for g in groups for t in g.get("topics",[])]
-        sentiment = keywords_sentiment(df, all_topics)
+        sentiment = keywords_sentiment(df, all_topics, job_id)
 
+        # publish results
         reply = {"groups":groups, "sentiment":sentiment}
-        channel.basic_publish(
+        ch.basic_publish(
             exchange='',
-            routing_key=properties.reply_to,
-            properties=pika.BasicProperties(correlation_id=properties.correlation_id),
-            body=json.dumps(reply)
+            routing_key="results_queue",
+            body=json.dumps(reply),
+            properties=pika.BasicProperties(
+                delivery_mode=2,
+                correlation_id=job_id
+            )
         )
+
+        # signal that it finished
+        publish_progress(job_id, "done", "Sentiment analysis complete", 1.0)
+
         print("✅ NLI aspect analysis done.")
     except Exception as e:
         print("Error in consumer:", e)
+        publish_progress(job_id, "error", "Error during sentiment analysis", 0.0)
         traceback.print_exc()
     finally:
         ch.basic_ack(delivery_tag=method.delivery_tag)
