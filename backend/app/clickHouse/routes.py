@@ -209,9 +209,18 @@ def run_topic():
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
-    topic_result = request.get_json().get("topic_result")
-    # just forward the full thing:
-    message = json.dumps(topic_result)
+    request_data = request.get_json() or {}
+    topic_result = request_data.get("topic_result") or {}
+    custom_keywords = request_data.get("custom_keywords") or []
+
+    # Forward the existing topic payload and optionally inject custom keywords.
+    if isinstance(topic_result, dict):
+        payload = dict(topic_result)
+    else:
+        payload = {"topic_result": topic_result}
+    payload["custom_keywords"] = custom_keywords
+
+    message = json.dumps(payload)
     result = SentimentAnalysisRpcClient().call(message)
     return jsonify({"result": json.loads(result)}), 200
 

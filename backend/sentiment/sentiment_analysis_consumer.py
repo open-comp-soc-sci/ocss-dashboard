@@ -24,10 +24,28 @@ channel = connection.channel()
 queue_name = 'sentiment_analysis_queue'
 channel.queue_declare(queue=queue_name, durable=True)
 
-def keywords_sentiment(df, topics):
+def _normalize_keyword_set(custom_keywords):
+    normalized = []
+    seen = set()
+    for kw in custom_keywords or []:
+        if not isinstance(kw, str):
+            continue
+        trimmed = kw.strip()
+        if not trimmed:
+            continue
+        lowered = trimmed.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        normalized.append(trimmed)
+    return normalized
+
+
+def keywords_sentiment(df, topics, custom_keywords=None):
     sentiment_stats = []
 
     seen_keywords = set()
+    normalized_custom = _normalize_keyword_set(custom_keywords)
 
     for topic in topics:
         topic_num      = topic["topicNumber"]
@@ -39,8 +57,23 @@ def keywords_sentiment(df, topics):
             })
             continue
 
-        # grab only the first keyword
-        first_kw = keywords_csv.split(",")[0].strip()
+        topic_keywords = [kw.strip() for kw in keywords_csv.split(",") if kw.strip()]
+        if normalized_custom:
+            # Only analyze custom keywords that are in this topic keyword list.
+            topic_keyword_lc = {kw.lower() for kw in topic_keywords}
+            matched_custom = [kw for kw in normalized_custom if kw.lower() in topic_keyword_lc]
+            if not matched_custom:
+                sentiment_stats.append({
+                    "topicNumber": topic_num,
+                    "ctfidfKeywords": keywords_csv,
+                    "error": "No custom keywords matched this topic"
+                })
+                continue
+            first_kw = matched_custom[0]
+        else:
+            # Default behavior: analyze the first c-TF-IDF keyword.
+            first_kw = topic_keywords[0]
+
         if first_kw in seen_keywords:
             # keyword already processed, skip it.
             continue
@@ -75,6 +108,13 @@ def keywords_sentiment(df, topics):
 def callback(ch, method, properties, body):
     try:
         grouping = json.loads(body)
+        if isinstance(grouping, dict) and isinstance(grouping.get("topic_result"), dict):
+            # Backward/forward compatibility: allow wrapper payload shape.
+            custom_keywords = grouping.get("custom_keywords", [])
+            grouping = grouping["topic_result"]
+        else:
+            custom_keywords = grouping.get("custom_keywords", []) if isinstance(grouping, dict) else []
+
         meta     = grouping.get("meta",{})
         groups   = grouping.get("groups",[])
     except Exception as e:
@@ -86,7 +126,7 @@ def callback(ch, method, properties, body):
         df = load_dataframe(meta)
         # flatten out all topics
         all_topics = [t for g in groups for t in g.get("topics",[])]
-        sentiment = keywords_sentiment(df, all_topics)
+        sentiment = keywords_sentiment(df, all_topics, custom_keywords=custom_keywords)
 
         reply = {"groups":groups, "sentiment":sentiment}
         channel.basic_publish(

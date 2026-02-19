@@ -59,6 +59,7 @@ function Data() {
 
   const [topicResult, setTopicResult] = useState(null);
   const [sentimentResult, setSentimentResult] = useState(null);
+  const [customKeywordsInput, setCustomKeywordsInput] = useState('');
   const [loadingTopic, setLoadingTopic] = useState(false);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [error, setError] = useState(null);
@@ -610,12 +611,19 @@ function Data() {
     if (!topicResult) return;
     setLoadingSentiment(true);
     setError(null);
+    const customKeywords = customKeywordsInput
+      .split(",")
+      .map(k => k.trim())
+      .filter(Boolean);
 
     try {
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic_result: topicResult })
+        body: JSON.stringify({
+          topic_result: topicResult,
+          custom_keywords: customKeywords
+        })
       });
       if (!response.ok) throw new Error("Sentiment analysis failed.");
 
@@ -870,13 +878,28 @@ function Data() {
 
             ) : !sentimentResult ? (
               // 2) after clustering, before sentiment
-              <button
-                className="btn btn-purple"
-                onClick={runSentimentAnalysis}
-                disabled={loadingSentiment}
-              >
-                {loadingSentiment ? 'Analyzing Sentiment…' : 'Start Sentiment Analysis'}
-              </button>
+              <div>
+                <div className="mb-3">
+                  <label className="form-label" htmlFor="customKeywordsInput">
+                    Custom Sentiment Keywords (comma-separated, optional)
+                  </label>
+                  <input
+                    id="customKeywordsInput"
+                    type="text"
+                    className="form-control"
+                    value={customKeywordsInput}
+                    onChange={(e) => setCustomKeywordsInput(e.target.value)}
+                    placeholder="e.g. pain, surgery, medication"
+                  />
+                </div>
+                <button
+                  className="btn btn-purple"
+                  onClick={runSentimentAnalysis}
+                  disabled={loadingSentiment}
+                >
+                  {loadingSentiment ? 'Analyzing Sentiment…' : 'Start Sentiment Analysis'}
+                </button>
+              </div>
 
             ) : (
               // 3) everything’s done—allow resetting
@@ -885,6 +908,7 @@ function Data() {
                 onClick={() => {
                   setTopicResult(null);
                   setSentimentResult(null);
+                  setCustomKeywordsInput('');
                 }}
               >
                 New Analysis
