@@ -617,7 +617,7 @@ function Data() {
                     if (progress.stage === "done") {
                         clearInterval(interval);
 
-                        const resultRes = await fetch(`/api/get_topic/${job_id}`);
+                        const resultRes = await fetch(`/api/get_result/${job_id}`);
                         const resultData = await resultRes.json();
 
                         setTopicResult(resultData.result);
@@ -642,32 +642,61 @@ function Data() {
 
   const runSentimentAnalysis = async () => {
     if (!topicResult) return;
+
     setLoadingSentiment(true);
     setError(null);
+    setSentimentResult(null);
+    setProgressMessage("Submitting job...");
+    setProgressPercent(0);
 
     try {
+      // Submit sentiment job
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic_result: topicResult })
       });
-      if (!response.ok) throw new Error("Sentiment analysis failed.");
 
-      const { result } = await response.json();
-      console.log("raw RPC result:", result);
+      if (!response.ok) throw new Error("Failed to submit sentiment job.");
 
-      // ⬇️ pull out exactly the array you need
-      const sentimentArray = Array.isArray(result)
-        ? result
-        : result.sentiment || [];
+      const { job_id } = await response.json();
 
-      console.log("sentimentArray:", sentimentArray);
-      setSentimentResult(sentimentArray);
-      // setTopicResult(null);
-      handleNotify("Sentiment Analysis complete!");
+      // Poll for progress
+      const interval = setInterval(async () => {
+        try {
+          const progressRes = await fetch(`/api/progress/${job_id}`);
+          const progress = await progressRes.json();
+
+          if (progress.message) setProgressMessage(progress.message);
+          if (progress.percent !== undefined) setProgressPercent(progress.percent);
+
+          // When done, fetch the results
+          if (progress.stage === "done") {
+            clearInterval(interval);
+
+            const resultRes = await fetch(`/api/get_result/${job_id}`);
+            const resultData = await resultRes.json();
+
+            // Extract sentiment array
+            const sentimentArray = Array.isArray(resultData.result)
+              ? resultData.result
+              : resultData.result?.sentiment || [];
+
+            setSentimentResult(sentimentArray);
+            setProgressMessage("Completed");
+            setProgressPercent(1);
+            setLoadingSentiment(false);
+            handleNotify("Sentiment Analysis complete!");
+          }
+        } catch (err) {
+          clearInterval(interval);
+          setError("Progress polling failed.");
+          setLoadingSentiment(false);
+        }
+      }, 1000); // poll every second
+
     } catch (err) {
       setError(err.message);
-    } finally {
       setLoadingSentiment(false);
     }
   };
@@ -900,19 +929,19 @@ function Data() {
                   onClick={runTopicClustering}
                   disabled={loadingTopic}
                 >
-                {loadingTopic ? 'Analyzing Topics…' : 'Run Topic Clustering'}
+                  {loadingTopic ? 'Analyzing Topics…' : 'Run Topic Clustering'}
                 </button>
 
                 {loadingTopic && (
-                <div style={{ marginTop: "15px" }}>
-                  <div>{progressMessage}</div>
-                  <div><strong>Progress:</strong> {(progressPercent * 100).toFixed(0)}%</div>
-                  <progress
-                    value={progressPercent}
-                    max="1"
-                    style={{ width: "100%" }}
-                  />
-                </div>
+                  <div style={{ marginTop: "15px" }}>
+                    <div>{progressMessage}</div>
+                    <div><strong>Progress:</strong> {(progressPercent * 100).toFixed(0)}%</div>
+                    <progress
+                      value={progressPercent}
+                      max="1"
+                      style={{ width: "100%" }}
+                    />
+                  </div>
                 )}
 
                 {error && (
@@ -922,17 +951,36 @@ function Data() {
                 )}
               </>
             ) : !sentimentResult ? (
-              // 2) after clustering, before sentiment
-              <button
-                className="btn btn-purple"
-                onClick={runSentimentAnalysis}
-                disabled={loadingSentiment}
-              >
-                {loadingSentiment ? 'Analyzing Sentiment…' : 'Start Sentiment Analysis'}
-              </button>
+              // Sentiment step after topic clustering
+              <>
+                <button
+                  className="btn btn-purple"
+                  onClick={runSentimentAnalysis}
+                  disabled={loadingSentiment}
+                >
+                  {loadingSentiment ? 'Analyzing Sentiment…' : 'Start Sentiment Analysis'}
+                </button>
 
+                {loadingSentiment && (
+                  <div style={{ marginTop: "15px" }}>
+                    <div>{progressMessage}</div>
+                    <div><strong>Progress:</strong> {(progressPercent * 100).toFixed(0)}%</div>
+                    <progress
+                      value={progressPercent}
+                      max="1"
+                      style={{ width: "100%" }}
+                    />
+                  </div>
+                )}
+
+                {error && (
+                  <div style={{ color: "red", marginTop: "10px" }}>
+                    {error}
+                  </div>
+                )}
+              </>
             ) : (
-              // 3) everything’s done—allow resetting
+              // All done—allow reset
               <button
                 className="btn btn-outline-secondary"
                 onClick={() => {

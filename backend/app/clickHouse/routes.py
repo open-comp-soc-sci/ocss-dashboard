@@ -208,7 +208,7 @@ def run_topic():
         # Send the data to the RPC Client
         topic_rpc_client.send_job(message, job_id)
         
-        # Return the topic clustering result directly to the frontend.
+        # Return the job id to the frontend
         return jsonify({
             "job_id": job_id
         }), 200
@@ -217,7 +217,7 @@ def run_topic():
         return jsonify({"error": str(e)}), 500
 
 
-@clickHouse_BP.route("/api/get_topic/<job_id>")
+@clickHouse_BP.route("/api/get_result/<job_id>")
 def get_topic(job_id):
     result = result_store.get(job_id)
 
@@ -242,11 +242,24 @@ def get_progress(job_id):
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
-    topic_result = request.get_json().get("topic_result")
-    # just forward the full thing:
-    message = json.dumps(topic_result)
-    result = SentimentAnalysisRpcClient().call(message)
-    return jsonify({"result": json.loads(result)}), 200
+    try:
+        topic_result = request.get_json().get("topic_result")
+
+        # generate job id to track progress on the frontend
+        job_id = str(uuid.uuid4())
+        
+        topic_result["job_id"] = job_id # also send the job id
+
+        # just forward the full thing:
+        message = json.dumps(topic_result)
+        SentimentAnalysisRpcClient().send_job(message, job_id)
+
+        # Return the job id to the frontend
+        return jsonify({
+            "job_id": job_id
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
