@@ -610,7 +610,7 @@ function Data() {
                     const progressRes = await fetch(`/api/progress/${job_id}`);
                     const progress = await progressRes.json();
 
-                    if (progress.stage) setProgressMessage(progress.stage);
+                    if (progress.message) setProgressMessage(progress.message);
                     if (progress.percent !== undefined) setProgressPercent(progress.percent);
 
                     // If done, fetch the result
@@ -620,12 +620,9 @@ function Data() {
                         const resultRes = await fetch(`/api/get_topic/${job_id}`);
                         const resultData = await resultRes.json();
 
-                        if (resultData.status === "complete") {
-                            setTopicResult(resultData.result);
-                            setProgressMessage("Completed");
-                            setProgressPercent(1);
-                        }
-
+                        setTopicResult(resultData.result);
+                        setProgressMessage("Completed");
+                        setProgressPercent(1);
                         setLoadingTopic(false);
                     }
 
@@ -908,7 +905,7 @@ function Data() {
 
                 {loadingTopic && (
                 <div style={{ marginTop: "15px" }}>
-                  <div><strong>Stage:</strong> {progressMessage}</div>
+                  <div>{progressMessage}</div>
                   <div><strong>Progress:</strong> {(progressPercent * 100).toFixed(0)}%</div>
                   <progress
                     value={progressPercent}
