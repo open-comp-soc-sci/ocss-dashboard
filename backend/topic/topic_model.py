@@ -321,7 +321,7 @@ class TopicModeling():
             )
         )
         channel = connection.channel()
-        channel.queue_declare(queue="topic_progress_queue", durable=True)
+        channel.queue_declare(queue="progress_queue", durable=True)
 
         progress_message = {
             "job_id": self.config.get("job_id"),
@@ -332,7 +332,7 @@ class TopicModeling():
 
         channel.basic_publish(
             exchange="",
-            routing_key="topic_progress_queue",
+            routing_key="progress_queue",
             body=json.dumps(progress_message),
             properties=pika.BasicProperties(delivery_mode=2)
         )

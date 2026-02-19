@@ -38,7 +38,7 @@ def start_progress_listener():
             connection = create_connection()
             channel = connection.channel()
 
-            channel.queue_declare(queue="topic_progress_queue", durable=True)
+            channel.queue_declare(queue="progress_queue", durable=True)
 
             def callback(ch, method, properties, body):
                 try:
@@ -57,11 +57,11 @@ def start_progress_listener():
                     ch.basic_ack(delivery_tag=method.delivery_tag)
 
             channel.basic_consume(
-                queue="topic_progress_queue",
+                queue="progress_queue",
                 on_message_callback=callback
             )
 
-            print(" [*] Listening for topic progress updates...")
+            print(" [*] Listening for progress updates...")
             channel.start_consuming()
 
         except Exception as e:
@@ -72,13 +72,13 @@ def start_progress_listener():
 
 
 def start_results_listener():
-    """Listen for final topic modeling results."""
+    """Listen for final topic modeling and sentiment analysis results."""
     while True:
         try:
             connection = create_connection()
             channel = connection.channel()
 
-            channel.queue_declare(queue="topic_results_queue", durable=True)
+            channel.queue_declare(queue="results_queue", durable=True)
 
             def callback(ch, method, properties, body):
                 try:
@@ -102,11 +102,11 @@ def start_results_listener():
                     ch.basic_ack(delivery_tag=method.delivery_tag)
 
             channel.basic_consume(
-                queue="topic_results_queue",
+                queue="results_queue",
                 on_message_callback=callback
             )
 
-            print(" [*] Listening for topic results...")
+            print(" [*] Listening for results...")
             channel.start_consuming()
 
         except Exception as e:

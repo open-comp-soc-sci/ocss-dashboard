@@ -67,7 +67,7 @@ def callback(ch, method, properties, body):
         response_body = json.dumps(result_message)
         ch.basic_publish(
             exchange='',
-            routing_key='topic_results_queue', # send the data to the results queue
+            routing_key='results_queue', # send the data to the results queue
             properties=pika.BasicProperties(
                 correlation_id=data["job_id"], # get the generated job id
                 delivery_mode=2
