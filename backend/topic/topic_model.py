@@ -120,8 +120,6 @@ class TopicModeling():
         self.publish_progress("create_topic_table", "Preparing final results", 6/7)
         self.create_topic_table()
 
-        self.publish_progress("done", "Topic modeling complete", 7/7)
-
         
     def load_data_frame(self):
         """

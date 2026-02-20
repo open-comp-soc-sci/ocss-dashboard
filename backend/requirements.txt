@@ -10,3 +10,4 @@ rabbitmq
 pandas
 openpyxl
 pyarrow
+redis
