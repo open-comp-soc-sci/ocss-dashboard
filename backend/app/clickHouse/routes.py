@@ -10,14 +10,14 @@ from ..rpc_client import TopicModelRpcClient  # Import the RPC client modules
 from ..rpc_client import SentimentAnalysisRpcClient 
 from app.extensions import db
 import uuid
-from app.progress_consumer import progress_store
-from app.progress_consumer import result_store
 
 import io
 import pandas as pd
 
 from io import BytesIO
 import time
+
+import app.redis_client as redis
 
 load_dotenv()
 
@@ -218,26 +218,27 @@ def run_topic():
 
 
 @clickHouse_BP.route("/api/get_result/<job_id>")
-def get_topic(job_id):
-    result = result_store.get(job_id)
+def get_result(job_id):
+    # Fetch result from Redis
+    result = redis.get_result(job_id)
 
-    if not result:
+    if result is None:
         return jsonify({"status": "processing"}), 202
 
     return jsonify({
-        "result": result
+        "result": json.loads(result)
     })
 
 
 @clickHouse_BP.route("/api/progress/<job_id>")
 def get_progress(job_id):
-    # return progress for Job ID or error if it doesn't exist
-    progress: dict | None = progress_store.get(job_id, None)
-
+    # Fetch progress from Redis
+    progress = redis.get_progress(job_id)
+    
     if progress is None:
-        return jsonify({"error": "Job ID does not exist"}), 400
-
-    return jsonify(progress)
+        return jsonify({"status": "processing"}), 202
+    
+    return jsonify(json.loads(progress))
 
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])

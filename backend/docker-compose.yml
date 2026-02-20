@@ -1,57 +1,97 @@
+version: "3.8"
 services:
-  app:
-    build: .
+  redis:
+    image: redis:7-alpine
+    container_name: redis
     ports:
-      - 5000:5000
-    volumes:
-      - .:/app
+      - "6379:6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
     environment:
-      FLASK_DEBUG: 1
-      FLASK_SQLALCHEMY_DATABASE_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
-    command: flask run -h 0.0.0.0
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    ports:
+      - "5672:5672"    # RabbitMQ message queue port
+      - "15672:15672"  # RabbitMQ web UI
+    restart: always
+
   db:
-    image: postgres
+    image: postgres:17
+    container_name: db
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db_users:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   adminer:
     image: adminer
     ports:
-      - 8080:8080
-  
-  rabbitmq:
-    image: rabbitmq:management
-    container_name: rabbitmq
+      - "8080:8080"
+
+  app:
+    build: .
+    container_name: app
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
     ports:
-      - "5672:5672"    # RabbitMQ message queue port
-      - "15672:15672"  # RabbitMQ web UI
-    restart: always
+      - "5000:5000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      FLASK_DEBUG: 1
+      FLASK_SQLALCHEMY_DATABASE_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: ["./wait-for-db.sh", "db", "sh", "-c", "python create_tables.py && flask run -h 0.0.0.0"]
 
   model1:
     build: ./model1
     container_name: model1
     depends_on:
-      - rabbitmq
-    restart: "no"  # Only runs once to send data
+      rabbitmq:
+        condition: service_started
+    restart: "no"
 
   model2:
     build: ./model2
     container_name: model2
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_started
     restart: always
 
   robertamodel:
     build: ./robertamodel
     container_name: robertamodel
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_started
     restart: always
 
 volumes:
   db_users:
-
-
