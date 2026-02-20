@@ -4,10 +4,7 @@ import json
 import threading
 import time
 import traceback
-
-# In-memory progress storage
-progress_store = {}
-result_store = {}
+from app.redis_client import set_progress, get_progress, set_result, get_result
 
 
 def create_connection():
@@ -46,8 +43,11 @@ def start_progress_listener():
                     job_id = data.get("job_id")
 
                     if job_id:
-                        progress_store[job_id] = data
-                        print("Progress update:", data)
+                        # Only set progress if result is not done yet
+                        current = get_progress(job_id)
+                        if not current or json.loads(current).get("stage") != "done":
+                            set_progress(job_id, json.dumps(data))
+                            print(f"Progress update for {job_id}")
 
                 except Exception as e:
                     print("Error processing progress message:", e)
@@ -72,27 +72,33 @@ def start_progress_listener():
 
 
 def start_results_listener():
-    """Listen for final topic modeling and sentiment analysis results."""
+    """Listen for final results and store them in Redis."""
     while True:
         try:
             connection = create_connection()
             channel = connection.channel()
-
             channel.queue_declare(queue="results_queue", durable=True)
 
             def callback(ch, method, properties, body):
                 try:
                     job_id = properties.correlation_id
-                    result_store[job_id] = json.loads(body)
+                    if not job_id:
+                        print("Received result without correlation_id")
+                        return
+
+                    result_data = json.loads(body)
+                    set_result(job_id, json.dumps(result_data))
+                    print(f"Result stored for job {job_id}")
 
                     # Mark progress as done
-                    progress_store[job_id] = {
+                    progress_data = {
                         "job_id": job_id,
                         "stage": "done",
+                        "message": "done",
                         "percent": 1
                     }
-
-                    print(f"Result received for job {job_id}")
+                    set_progress(job_id, json.dumps(progress_data))
+                    print(f"Progress marked done for job {job_id}")
 
                 except Exception as e:
                     print("Error processing result message:", e)

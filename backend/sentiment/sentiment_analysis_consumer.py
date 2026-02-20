@@ -157,9 +157,6 @@ def callback(ch, method, properties, body):
         reply = {"groups":groups, "sentiment":sentiment}
         publish_results(job_id, reply)
 
-        # signal that it finished
-        publish_progress(job_id, "done", "Sentiment analysis complete", 1.0)
-
         print("✅ NLI aspect analysis done.")
     except Exception as e:
         print("Error in consumer:", e)

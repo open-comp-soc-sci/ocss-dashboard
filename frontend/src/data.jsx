@@ -624,6 +624,7 @@ function Data() {
                         setProgressMessage("Completed");
                         setProgressPercent(1);
                         setLoadingTopic(false);
+                        handleNotify("Topic Clustering complete!");
                     }
 
                 } catch (err) {

@@ -1,12 +1,61 @@
 version: "3.8"
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "password"
+    ports:
+      - "5672:5672"   # AMQP connection port
+      - "15672:15672" # Management interface port
+    restart: always
+
+  db:
+    image: postgres:17
+    container_name: db
+    env_file:
+      - .env
+    volumes:
+      - db_users:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  adminer:
+    image: adminer
+    ports:
+      - "8089:8080"
+
   app:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: app
     depends_on:
-      - db
-      - rabbitmq
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
     ports:
       - "5000:5000"
     volumes:
@@ -18,6 +67,8 @@ services:
       FLASK_DEBUG: 1
       PROPAGATE_EXCEPTIONS: True
       FLASK_SQLALCHEMY_DATABASE_URI: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       RUNNINGLOCAL: ${RUNNINGLOCAL}
     command: ["./wait-for-db.sh", "db", "sh", "-c", "python create_tables.py && flask run -h 0.0.0.0"]
 
@@ -28,30 +79,9 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./frontend:/app   # Mount local ./frontend folder to /app in container
+      - ./frontend:/app
     env_file:
       - .env
-
-  db:
-    image: postgres:17
-    env_file:
-      - .env
-    volumes:
-      - db_users:/var/lib/postgresql/data
-
-  adminer:
-    image: adminer
-    ports:
-      - "8089:8080"
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    environment:
-      RABBITMQ_DEFAULT_USER: "user"
-      RABBITMQ_DEFAULT_PASS: "password"
-    ports:
-      - "5672:5672"   # AMQP connection port
-      - "15672:15672" # Management interface port
 
 volumes:
   db_users:
