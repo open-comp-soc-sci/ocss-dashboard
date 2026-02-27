@@ -246,16 +246,22 @@ def run_sentiment():
     try:
         request_data = request.get_json() or {}
         topic_result = request_data.get("topic_result")
-        custom_keywords = request_data.get("custom_keywords") or []
+        raw_custom_keywords = request_data.get("custom_keywords", [])
+        if isinstance(raw_custom_keywords, list):
+            custom_keywords = raw_custom_keywords
+        elif isinstance(raw_custom_keywords, str):
+            custom_keywords = [raw_custom_keywords]
+        else:
+            return jsonify({"error": "custom_keywords must be an array of strings"}), 400
+
+        if not isinstance(topic_result, dict):
+            return jsonify({"error": "topic_result must be an object"}), 400
 
         # generate job id to track progress on the frontend
         job_id = str(uuid.uuid4())
 
         # Forward the existing topic payload and optionally inject custom keywords.
-        if isinstance(topic_result, dict):
-            payload = dict(topic_result)
-        else:
-            payload = {"topic_result": topic_result}
+        payload = dict(topic_result)
         payload["job_id"] = job_id
         payload["custom_keywords"] = custom_keywords
 
