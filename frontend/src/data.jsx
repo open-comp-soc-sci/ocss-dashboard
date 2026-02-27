@@ -227,8 +227,8 @@ function Data() {
   if (topicResult?.groups) {
     const labels = topicResult.groups.map(g => g.llmLabel);
     const data = topicResult.groups.map(g => g.postCount);
-    topicChartData = { labels, datasets: [{ label: "Posts per Cluster", data, backgroundColor: labels.map((_, i) => getBackgroundColor(i)), borderColor: labels.map((_, i) => getBorderColor(i)), borderWidth: 1 }] };
-    topicChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Count" } }, x: { title: { display: true, text: "Cluster" } } }, plugins: { legend: { position: "bottom" } } };
+    topicChartData = { labels, datasets: [{ label: "Posts per Group", data, backgroundColor: labels.map((_, i) => getBackgroundColor(i)), borderColor: labels.map((_, i) => getBorderColor(i)), borderWidth: 1 }] };
+    topicChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Count" } }, x: { title: { display: true, text: "Group" } } }, plugins: { legend: { position: "bottom" } } };
   }
 
   // 2) sentiment‐chart
@@ -898,11 +898,17 @@ function Data() {
           {/* {error && <p className="text-danger mt-3">Error: {error}</p>} */}
         </div>
 
-        {/* Sentiment Analysis Section */}
+        {/* Topic Clustering + Sentiment Section */}
 
         <div className="col-md-8">
-          <h2>Sentiment Analysis</h2>
-          <p>Posts within the selected date range.</p>
+          <h2>Topic Clustering & Sentiment</h2>
+          <p>
+            {Array.isArray(sentimentResult)
+              ? "Sentiment results for clustered topics in the selected date range."
+              : topicResult?.groups
+                ? "Topic clustering results for the selected date range."
+                : "Run topic clustering first to generate topic groups for the selected date range."}
+          </p>
 
           <div style={{ backgroundColor: '#333', borderRadius: 8, padding: '1rem', marginBottom: '2rem' }}>
             {Array.isArray(sentimentResult) ? (
