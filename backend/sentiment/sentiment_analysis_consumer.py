@@ -99,6 +99,60 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
     total_topics = len(topics)
     normalized_custom = _normalize_keyword_set(custom_keywords)
 
+    if normalized_custom:
+        total_custom = len(normalized_custom)
+        for idx, first_kw in enumerate(normalized_custom):
+            topic_num = idx + 1
+            bodies = [b for b in df["body"] if first_kw.lower() in b.lower()]
+            bodies = list(dict.fromkeys(bodies))[:1000]
+
+            progress_percent = (idx / total_custom) if total_custom else 1
+            publish_progress(
+                job_id=job_id,
+                stage="analyzing_keyword",
+                message=f"Keyword {idx+1}/{total_custom}: analyzing '{first_kw}'",
+                percent=progress_percent
+            )
+
+            if not bodies:
+                sentiment_stats.append({
+                    "topicNumber": topic_num,
+                    "ctfidfKeywords": "",
+                    "error": "No matching posts/comments found for this custom keyword",
+                    "sentiment": [
+                        {
+                            "keyword": first_kw,
+                            "sentiment": {
+                                "negative": {"count": 0, "avg_score": 0},
+                                "neutral": {"count": 0, "avg_score": 0},
+                                "positive": {"count": 0, "avg_score": 0}
+                            }
+                        }
+                    ]
+                })
+                continue
+
+            print(f"[NLI] Custom keyword {idx+1}/{total_custom}: "
+                  f"\u201c{first_kw}\u201d")
+            stats = run_nli_aspect_analysis(
+                terms=[first_kw],
+                sectioned_bodies=[bodies],
+                topics=[topic_num]
+            )
+
+            sentiment_stats.append({
+                "topicNumber": topic_num,
+                "ctfidfKeywords": "",
+                "sentiment": [
+                    {
+                        "keyword": first_kw,
+                        "sentiment": stats.get((first_kw, topic_num), {})
+                    }
+                ]
+            })
+
+        return sentiment_stats
+
     for idx, topic in enumerate(topics):
         topic_num      = topic["topicNumber"]
         keywords_csv   = topic.get("ctfidfKeywords", "")
@@ -110,21 +164,8 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
             continue
 
         topic_keywords = [kw.strip() for kw in keywords_csv.split(",") if kw.strip()]
-        if normalized_custom:
-            # Only analyze custom keywords that are in this topic keyword list.
-            topic_keyword_lc = {kw.lower() for kw in topic_keywords}
-            matched_custom = [kw for kw in normalized_custom if kw.lower() in topic_keyword_lc]
-            if not matched_custom:
-                sentiment_stats.append({
-                    "topicNumber": topic_num,
-                    "ctfidfKeywords": keywords_csv,
-                    "error": "No custom keywords matched this topic"
-                })
-                continue
-            first_kw = matched_custom[0]
-        else:
-            # Default behavior: analyze the first c-TF-IDF keyword.
-            first_kw = topic_keywords[0]
+        # Default behavior: analyze the first c-TF-IDF keyword.
+        first_kw = topic_keywords[0]
 
         if first_kw.lower() in seen_keywords:
             # keyword already processed, skip it.
