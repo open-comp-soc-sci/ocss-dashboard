@@ -61,6 +61,7 @@ function Data() {
 
   const [topicResult, setTopicResult] = useState(null);
   const [sentimentResult, setSentimentResult] = useState(null);
+  const [customKeywordsInput, setCustomKeywordsInput] = useState('');
   const [loadingTopic, setLoadingTopic] = useState(false);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [error, setError] = useState(null);
@@ -649,13 +650,20 @@ function Data() {
     setSentimentResult(null);
     setProgressMessage("Submitting job...");
     setProgressPercent(0);
+    const customKeywords = customKeywordsInput
+      .split(",")
+      .map(k => k.trim())
+      .filter(Boolean);
 
     try {
       // Submit sentiment job
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic_result: topicResult })
+        body: JSON.stringify({
+          topic_result: topicResult,
+          custom_keywords: customKeywords
+        })
       });
 
       if (!response.ok) throw new Error("Failed to submit sentiment job.");
@@ -960,6 +968,19 @@ function Data() {
             ) : !sentimentResult ? (
               // Sentiment step after topic clustering
               <>
+                <div className="mb-3">
+                  <label className="form-label" htmlFor="customKeywordsInput">
+                    Custom Sentiment Keywords (comma-separated, optional)
+                  </label>
+                  <input
+                    id="customKeywordsInput"
+                    type="text"
+                    className="form-control"
+                    value={customKeywordsInput}
+                    onChange={(e) => setCustomKeywordsInput(e.target.value)}
+                    placeholder="e.g. pain, surgery, medication"
+                  />
+                </div>
                 <button
                   className="btn btn-purple"
                   onClick={runSentimentAnalysis}
@@ -993,6 +1014,7 @@ function Data() {
                 onClick={() => {
                   setTopicResult(null);
                   setSentimentResult(null);
+                  setCustomKeywordsInput('');
                 }}
               >
                 New Analysis
