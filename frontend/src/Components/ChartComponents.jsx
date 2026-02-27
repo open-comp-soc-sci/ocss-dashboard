@@ -17,23 +17,31 @@ function getBarColor(score) {
 export function FirstKeywordSentimentChart({ sentiment }) {
   const chartRef = useRef(null);
 
-  // filter ≥15 mentions
-  const filtered = sentiment.filter(item => {
-    const s = item.sentiment[0]?.sentiment;
-    if (!s) return false;
-    const total = (s.negative?.count || 0)
-                + (s.neutral?.count  || 0)
-                + (s.positive?.count || 0);
+  const normalized = (Array.isArray(sentiment) ? sentiment : []).map(item => {
+    const s = item?.sentiment?.[0]?.sentiment || {};
+    return {
+      label:
+        item?.sentiment?.[0]?.keyword ||
+        item?.ctfidfKeywords?.split(',')[0]?.trim() ||
+        `Topic ${item?.topicNumber ?? ""}`,
+      negative: s.negative || { count: 0, avg_score: 0 },
+      neutral: s.neutral || { count: 0, avg_score: 0 },
+      positive: s.positive || { count: 0, avg_score: 0 }
+    };
+  });
+
+  const filtered = normalized.filter(item => {
+    const total = (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0);
     return total >= 10;
   });
 
-  const labels    = filtered.map(item => item.ctfidfKeywords.split(',')[0].trim());
-  const negCounts = filtered.map(i => i.sentiment[0].sentiment.negative.count);
-  const neuCounts = filtered.map(i => i.sentiment[0].sentiment.neutral.count);
-  const posCounts = filtered.map(i => i.sentiment[0].sentiment.positive.count);
-  const negScores = filtered.map(i => i.sentiment[0].sentiment.negative.avg_score);
-  const neuScores = filtered.map(i => i.sentiment[0].sentiment.neutral.avg_score);
-  const posScores = filtered.map(i => i.sentiment[0].sentiment.positive.avg_score);
+  const labels = filtered.map(item => item.label);
+  const negCounts = filtered.map(i => i.negative.count);
+  const neuCounts = filtered.map(i => i.neutral.count);
+  const posCounts = filtered.map(i => i.positive.count);
+  const negScores = filtered.map(i => i.negative.avg_score);
+  const neuScores = filtered.map(i => i.neutral.avg_score);
+  const posScores = filtered.map(i => i.positive.avg_score);
 
   const data = {
     labels,
@@ -89,22 +97,29 @@ export function FirstKeywordSentimentChart({ sentiment }) {
 export function WeightedSentimentChart({ sentiment }) {
   const chartRef = useRef(null);
 
-  // filter ≥15 mentions
-  const filtered = sentiment.filter(item => {
-    const s = item.sentiment[0]?.sentiment;
-    if (!s) return false;
-    const total = (s.negative?.count || 0)
-                + (s.neutral?.count  || 0)
-                + (s.positive?.count || 0);
+  const normalized = (Array.isArray(sentiment) ? sentiment : []).map(item => {
+    const s = item?.sentiment?.[0]?.sentiment || {};
+    return {
+      label:
+        item?.sentiment?.[0]?.keyword ||
+        item?.ctfidfKeywords?.split(',')[0]?.trim() ||
+        `Topic ${item?.topicNumber ?? ""}`,
+      negative: s.negative || { count: 0, avg_score: 0 },
+      neutral: s.neutral || { count: 0, avg_score: 0 },
+      positive: s.positive || { count: 0, avg_score: 0 }
+    };
+  });
+
+  const filtered = normalized.filter(item => {
+    const total = (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0);
     return total >= 10;
   });
 
-  const labels   = filtered.map(item => item.ctfidfKeywords.split(',')[0].trim());
+  const labels   = filtered.map(item => item.label);
   const weighted = filtered.map(item => {
-    const s = item.sentiment[0].sentiment;
-    const neg = (s.negative.count || 0) * -(s.negative.avg_score || 0);
-    const pos = (s.positive.count || 0) *  (s.positive.avg_score || 0);
-    const total = (s.negative.count || 0) + (s.neutral.count || 0) + (s.positive.count || 0);
+    const neg = (item.negative.count || 0) * -(item.negative.avg_score || 0);
+    const pos = (item.positive.count || 0) *  (item.positive.avg_score || 0);
+    const total = (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0);
     return total > 0 ? (neg + pos) / total : 0;
   });
   const bg = weighted.map(v => getBarColor(v).background);
