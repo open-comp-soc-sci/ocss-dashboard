@@ -244,15 +244,28 @@ def get_progress(job_id):
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
     try:
-        topic_result = request.get_json().get("topic_result")
+        request_data = request.get_json() or {}
+        topic_result = request_data.get("topic_result")
+        raw_custom_keywords = request_data.get("custom_keywords", [])
+        if isinstance(raw_custom_keywords, list):
+            custom_keywords = raw_custom_keywords
+        elif isinstance(raw_custom_keywords, str):
+            custom_keywords = [raw_custom_keywords]
+        else:
+            return jsonify({"error": "custom_keywords must be an array of strings"}), 400
+
+        if not isinstance(topic_result, dict):
+            return jsonify({"error": "topic_result must be an object"}), 400
 
         # generate job id to track progress on the frontend
         job_id = str(uuid.uuid4())
-        
-        topic_result["job_id"] = job_id # also send the job id
 
-        # just forward the full thing:
-        message = json.dumps(topic_result)
+        # Forward the existing topic payload and optionally inject custom keywords.
+        payload = dict(topic_result)
+        payload["job_id"] = job_id
+        payload["custom_keywords"] = custom_keywords
+
+        message = json.dumps(payload)
         SentimentAnalysisRpcClient().send_job(message, job_id)
 
         # Return the job id to the frontend
