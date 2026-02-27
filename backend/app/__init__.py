@@ -22,5 +22,5 @@ def create_app():
     app.register_blueprint(clickHouse_BP)
     app.register_blueprint(pullReddit_BP)
     app.register_blueprint(searchHistory_BP)
-    
+
     return app

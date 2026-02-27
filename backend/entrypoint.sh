@@ -1,17 +1,21 @@
 #!/bin/sh
 set -e
 
-# Optionally, wait for the database to be ready:
+# If a command is provided (docker-compose "command:"), run it as-is.
+# This allows non-web services (e.g., progress_consumer) to use the same image.
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
+
+# Default behavior when no command is provided: start the Flask app.
 echo "Waiting for database..."
-until pg_isready -h db -p 5432; do
+until pg_isready -h db -p 5432 -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}"; do
   >&2 echo "Database is unavailable - sleeping"
   sleep 1
 done
 >&2 echo "Database is up - creating tables..."
 
-# Run the table creation script
 python -u create_tables.py
 
 echo "Starting Flask server..."
 exec python -u -m flask run --host=0.0.0.0 --port=5000
-

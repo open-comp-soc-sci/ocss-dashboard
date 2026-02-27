@@ -56,6 +56,8 @@ function Data() {
   const prevSubredditRef = useRef(null);
 
   const [clusteringResults, setClusteringResults] = useState(null);
+  const [progressMessage, setProgressMessage] = useState(""); // e.g., "Fetching Data"
+  const [progressPercent, setProgressPercent] = useState(0);  // 0 to 1
 
   const [topicResult, setTopicResult] = useState(null);
   const [sentimentResult, setSentimentResult] = useState(null);
@@ -225,8 +227,8 @@ function Data() {
   if (topicResult?.groups) {
     const labels = topicResult.groups.map(g => g.llmLabel);
     const data = topicResult.groups.map(g => g.postCount);
-    topicChartData = { labels, datasets: [{ label: "Posts per Cluster", data, backgroundColor: labels.map((_, i) => getBackgroundColor(i)), borderColor: labels.map((_, i) => getBorderColor(i)), borderWidth: 1 }] };
-    topicChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Count" } }, x: { title: { display: true, text: "Cluster" } } }, plugins: { legend: { position: "bottom" } } };
+    topicChartData = { labels, datasets: [{ label: "Posts per Group", data, backgroundColor: labels.map((_, i) => getBackgroundColor(i)), borderColor: labels.map((_, i) => getBorderColor(i)), borderWidth: 1 }] };
+    topicChartOptions = { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: "Count" } }, x: { title: { display: true, text: "Group" } } }, plugins: { legend: { position: "bottom" } } };
   }
 
   // 2) sentiment‐chart
@@ -573,67 +575,129 @@ function Data() {
     
   }, []);
 
-  const runTopicClustering = async () => {
-    // build this freshly every time
-    const options = [
-      includeSubmissions && "reddit_submissions",
-      includeComments && "reddit_comments"
-    ].filter(Boolean).join(",");
+    const runTopicClustering = async () => {
+        const options = [
+            includeSubmissions && "reddit_submissions",
+            includeComments && "reddit_comments"
+        ].filter(Boolean).join(",");
 
-    setLoadingTopic(true);
-    setError(null);
-    setSentimentResult(null);    // ← clear old sentiment
+        setLoadingTopic(true);
+        setError(null);
+        setTopicResult(null);
+        setProgressMessage("Submitting job...");
+        setProgressPercent(0);
 
-    try {
-      const response = await fetch("/api/run_topic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subreddit,
-          option: options,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString()
-        })
-      });
-      if (!response.ok) throw new Error("Topic clustering failed.");
-      const { result } = await response.json();   // { groups: [...], … }
-      setTopicResult(result);
-      handleNotify("Topic Clustering complete!");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoadingTopic(false);
-    }
-  };
+        try {
+            // Submit the job
+            const response = await fetch("/api/run_topic", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subreddit,
+                    option: options,
+                    startDate: startDate.toISOString(),
+                    endDate: endDate.toISOString()
+                })
+            });
+
+            if (!response.ok) throw new Error("Failed to submit topic job.");
+
+            const { job_id } = await response.json();
+
+            // Poll for progress
+            const interval = setInterval(async () => {
+                try {
+                    const progressRes = await fetch(`/api/progress/${job_id}`);
+                    const progress = await progressRes.json();
+
+                    if (progress.message) setProgressMessage(progress.message);
+                    if (progress.percent !== undefined) setProgressPercent(progress.percent);
+
+                    // If done, fetch the result
+                    if (progress.stage === "done") {
+                        clearInterval(interval);
+
+                        const resultRes = await fetch(`/api/get_result/${job_id}`);
+                        const resultData = await resultRes.json();
+
+                        setTopicResult(resultData.result);
+                        setProgressMessage("Completed");
+                        setProgressPercent(1);
+                        setLoadingTopic(false);
+                        handleNotify("Topic Clustering complete!");
+                    }
+
+                } catch (err) {
+                    clearInterval(interval);
+                    setError("Progress polling failed.");
+                    setLoadingTopic(false);
+                }
+            }, 1000); // poll every second
+
+        } catch (err) {
+            setError(err.message);
+            setLoadingTopic(false);
+        }
+    };
+
 
   const runSentimentAnalysis = async () => {
     if (!topicResult) return;
+
     setLoadingSentiment(true);
     setError(null);
+    setSentimentResult(null);
+    setProgressMessage("Submitting job...");
+    setProgressPercent(0);
 
     try {
+      // Submit sentiment job
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic_result: topicResult })
       });
-      if (!response.ok) throw new Error("Sentiment analysis failed.");
 
-      const { result } = await response.json();
-      console.log("raw RPC result:", result);
+      if (!response.ok) throw new Error("Failed to submit sentiment job.");
 
-      // ⬇️ pull out exactly the array you need
-      const sentimentArray = Array.isArray(result)
-        ? result
-        : result.sentiment || [];
+      const { job_id } = await response.json();
 
-      console.log("sentimentArray:", sentimentArray);
-      setSentimentResult(sentimentArray);
-      // setTopicResult(null);
-      handleNotify("Sentiment Analysis complete!");
+      // Poll for progress
+      const interval = setInterval(async () => {
+        try {
+          const progressRes = await fetch(`/api/progress/${job_id}`);
+          const progress = await progressRes.json();
+
+          if (progress.message) setProgressMessage(progress.message);
+          if (progress.percent !== undefined) setProgressPercent(progress.percent);
+
+          // When done, fetch the results
+          if (progress.stage === "done") {
+            clearInterval(interval);
+
+            const resultRes = await fetch(`/api/get_result/${job_id}`);
+            const resultData = await resultRes.json();
+
+            // Extract sentiment array
+            const sentimentArray = Array.isArray(resultData.result)
+              ? resultData.result
+              : resultData.result?.sentiment || [];
+
+            setSentimentResult(sentimentArray);
+            setProgressMessage("Completed");
+            setProgressPercent(1);
+            setLoadingSentiment(false);
+            handleNotify("Sentiment Analysis complete!");
+          }
+        } catch (err) {
+          clearInterval(interval);
+          setError("Progress polling failed.");
+          setLoadingSentiment(false);
+        }
+      }, 1000); // poll every second
+
     } catch (err) {
       setError(err.message);
-    } finally {
       setLoadingSentiment(false);
     }
   };
@@ -834,11 +898,17 @@ function Data() {
           {/* {error && <p className="text-danger mt-3">Error: {error}</p>} */}
         </div>
 
-        {/* Sentiment Analysis Section */}
+        {/* Topic Clustering + Sentiment Section */}
 
         <div className="col-md-8">
-          <h2>Sentiment Analysis</h2>
-          <p>Posts within the selected date range.</p>
+          <h2>Topic Clustering & Sentiment</h2>
+          <p>
+            {Array.isArray(sentimentResult)
+              ? "Sentiment results for clustered topics in the selected date range."
+              : topicResult?.groups
+                ? "Topic clustering results for the selected date range."
+                : "Run topic clustering first to generate topic groups for the selected date range."}
+          </p>
 
           <div style={{ backgroundColor: '#333', borderRadius: 8, padding: '1rem', marginBottom: '2rem' }}>
             {Array.isArray(sentimentResult) ? (
@@ -857,29 +927,67 @@ function Data() {
           </div>
 
 
+
           <div className="mt-4">
             {!topicResult ? (
-              // 1) before clustering
-              <button
-                className="btn btn-success"
-                onClick={runTopicClustering}
-                disabled={loadingTopic}
-              >
-                {loadingTopic ? 'Analyzing Topics…' : 'Run Topic Clustering'}
-              </button>
+              <>
+                <button
+                  className="btn btn-success"
+                  onClick={runTopicClustering}
+                  disabled={loadingTopic}
+                >
+                  {loadingTopic ? 'Analyzing Topics…' : 'Run Topic Clustering'}
+                </button>
 
+                {loadingTopic && (
+                  <div style={{ marginTop: "15px" }}>
+                    <div>{progressMessage}</div>
+                    <div><strong>Progress:</strong> {(progressPercent * 100).toFixed(0)}%</div>
+                    <progress
+                      value={progressPercent}
+                      max="1"
+                      style={{ width: "100%" }}
+                    />
+                  </div>
+                )}
+
+                {error && (
+                  <div style={{ color: "red", marginTop: "10px" }}>
+                    {error}
+                  </div>
+                )}
+              </>
             ) : !sentimentResult ? (
-              // 2) after clustering, before sentiment
-              <button
-                className="btn btn-purple"
-                onClick={runSentimentAnalysis}
-                disabled={loadingSentiment}
-              >
-                {loadingSentiment ? 'Analyzing Sentiment…' : 'Start Sentiment Analysis'}
-              </button>
+              // Sentiment step after topic clustering
+              <>
+                <button
+                  className="btn btn-purple"
+                  onClick={runSentimentAnalysis}
+                  disabled={loadingSentiment}
+                >
+                  {loadingSentiment ? 'Analyzing Sentiment…' : 'Start Sentiment Analysis'}
+                </button>
 
+                {loadingSentiment && (
+                  <div style={{ marginTop: "15px" }}>
+                    <div>{progressMessage}</div>
+                    <div><strong>Progress:</strong> {(progressPercent * 100).toFixed(0)}%</div>
+                    <progress
+                      value={progressPercent}
+                      max="1"
+                      style={{ width: "100%" }}
+                    />
+                  </div>
+                )}
+
+                {error && (
+                  <div style={{ color: "red", marginTop: "10px" }}>
+                    {error}
+                  </div>
+                )}
+              </>
             ) : (
-              // 3) everything’s done—allow resetting
+              // All done—allow reset
               <button
                 className="btn btn-outline-secondary"
                 onClick={() => {

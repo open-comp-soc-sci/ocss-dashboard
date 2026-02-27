@@ -9,13 +9,15 @@ from . import clickHouse_BP
 from ..rpc_client import TopicModelRpcClient  # Import the RPC client modules
 from ..rpc_client import SentimentAnalysisRpcClient 
 from app.extensions import db
-
+import uuid
 
 import io
 import pandas as pd
 
 from io import BytesIO
 import time
+
+import app.redis_client as redis
 
 load_dotenv()
 
@@ -186,34 +188,79 @@ def run_topic():
     try:
         # Retrieve parameters from the POST body.
         request_data = request.get_json() or {}
+
+        # generate job id to track progress on the frontend
+        job_id = str(uuid.uuid4())
+
         parameters = {
+            "job_id": job_id,
             "data_source": request_data.get("data_source", "api"),
             "subreddit": request_data.get("subreddit", ""),
             "option": request_data.get("option", "reddit_submissions"),
             "startDate": request_data.get("startDate", ""),
-            "endDate": request_data.get("endDate", "")
+            "endDate": request_data.get("endDate", ""),
         }
         message = json.dumps(parameters)
         
         # Instantiate the TopicModelRpcClient.
         topic_rpc_client = TopicModelRpcClient()
         
-        # Call the topic modeling RPC client and capture the result.
-        result = topic_rpc_client.call(message)
+        # Send the data to the RPC Client
+        topic_rpc_client.send_job(message, job_id)
         
-        # Return the topic clustering result directly to the frontend.
-        return jsonify({"result": json.loads(result)}), 200
+        # Return the job id to the frontend
+        return jsonify({
+            "job_id": job_id
+        }), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+@clickHouse_BP.route("/api/get_result/<job_id>")
+def get_result(job_id):
+    # Fetch result from Redis
+    result = redis.get_result(job_id)
+
+    if result is None:
+        return jsonify({"status": "processing"}), 202
+
+    return jsonify({
+        "result": json.loads(result)
+    })
+
+
+@clickHouse_BP.route("/api/progress/<job_id>")
+def get_progress(job_id):
+    # Fetch progress from Redis
+    progress = redis.get_progress(job_id)
+    
+    if progress is None:
+        return jsonify({"status": "processing"}), 202
+    
+    return jsonify(json.loads(progress))
+
+
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
 def run_sentiment():
-    topic_result = request.get_json().get("topic_result")
-    # just forward the full thing:
-    message = json.dumps(topic_result)
-    result = SentimentAnalysisRpcClient().call(message)
-    return jsonify({"result": json.loads(result)}), 200
+    try:
+        topic_result = request.get_json().get("topic_result")
+
+        # generate job id to track progress on the frontend
+        job_id = str(uuid.uuid4())
+        
+        topic_result["job_id"] = job_id # also send the job id
+
+        # just forward the full thing:
+        message = json.dumps(topic_result)
+        SentimentAnalysisRpcClient().send_job(message, job_id)
+
+        # Return the job id to the frontend
+        return jsonify({
+            "job_id": job_id
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
