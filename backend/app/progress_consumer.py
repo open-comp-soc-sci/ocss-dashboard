@@ -122,20 +122,25 @@ def start_results_listener():
             time.sleep(5)
 
 
-def run_progress_consumer():
-    """Start both listeners in background daemon threads."""
-
+def run_progress_consumer(blocking=True):
+    """Start both listeners. In blocking mode this process stays alive."""
     progress_thread = threading.Thread(
         target=start_progress_listener,
-        daemon=True
+        daemon=not blocking
     )
-
     results_thread = threading.Thread(
         target=start_results_listener,
-        daemon=True
+        daemon=not blocking
     )
 
     progress_thread.start()
     results_thread.start()
-
     print("Progress and results listeners started.")
+
+    if blocking:
+        progress_thread.join()
+        results_thread.join()
+
+
+if __name__ == "__main__":
+    run_progress_consumer(blocking=True)
