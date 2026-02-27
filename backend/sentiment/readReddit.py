@@ -14,7 +14,7 @@ def load_dataframe(meta):
     # Build the API URL and append date parameters if provided.
     print('fetching from clickhouse')
 
-    api_url = f"https://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
+    api_url = f"http://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
     if startDate:
         api_url += f"&startDate={startDate}"
     if endDate:

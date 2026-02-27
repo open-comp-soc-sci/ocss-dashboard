@@ -99,13 +99,25 @@ class TopicModeling():
         self.config = config
 
     def run(self):
+        self.publish_progress("load_data_frame", "Fetching data from ClickHouse", 1/7)
         self.load_data_frame()
+
+        self.publish_progress("find_topics", "Finding topic clusters", 2/7)
         self.find_topics()
+
+        self.publish_progress("label_topics", "Generating topic labels", 3/7)
         self.label_topics()
+
+        self.publish_progress("find_groups", "Grouping similar topics", 4/7)
         self.find_groups()
+
+        self.publish_progress("label_groups", "Generating group labels", 5/7)
         self.label_groups()
+
         # self.send_groups()
         # self.plot_topics()
+
+        self.publish_progress("create_topic_table", "Preparing final results", 6/7)
         self.create_topic_table()
 
         
@@ -123,7 +135,7 @@ class TopicModeling():
             # Build the API URL and append date parameters if provided.
             print('fetching from clickhouse')
 
-            api_url = f"https://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
+            api_url = f"http://sunshine.cise.ufl.edu:5000/api/get_arrow?subreddit={subreddit}&option={option}"
             if start_date:
                 api_url += f"&startDate={start_date}"
             if end_date:
@@ -286,7 +298,44 @@ class TopicModeling():
             # pickle.dump(self.topics, fh)
 
     def label_topics(self):
-        self.topic_labeler = TopicLabeling(self.df, self.topics, self.embeddings, self.topic_model, self.config)
+        self.topic_labeler = TopicLabeling(
+            self.df,
+            self.topics,
+            self.embeddings,
+            self.topic_model,
+            self.config,
+            publish_progress_callback=self.publish_progress
+        )
+
+
+    def publish_progress(self, stage, message, percent):
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(
+                host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
+                credentials=pika.PlainCredentials(
+                    os.getenv("RABBITMQ_USER", "user"),
+                    os.getenv("RABBITMQ_PASS", "password")
+                )
+            )
+        )
+        channel = connection.channel()
+        channel.queue_declare(queue="progress_queue", durable=True)
+
+        progress_message = {
+            "job_id": self.config.get("job_id"),
+            "stage": stage,
+            "message": message,
+            "percent": percent
+        }
+
+        channel.basic_publish(
+            exchange="",
+            routing_key="progress_queue",
+            body=json.dumps(progress_message),
+            properties=pika.BasicProperties(delivery_mode=2)
+        )
+
+        connection.close()
 
 
     def find_groups(self):
@@ -520,20 +569,20 @@ class TopicModeling():
 
 class TopicLabeling():
 
-    def __init__(self, df, topics, embeddings, topic_model, config):
+    def __init__(self, df, topics, embeddings, topic_model, config, publish_progress_callback=None):
         self.df = df
         self.topics = topics
         self.embeddings = embeddings
         self.topic_model = topic_model
         self.config = config
+        self.publish_progress_callback = publish_progress_callback
 
         self.llm = Ollama(model="gemma3:27b", base_url=f"http://ollama_container:11434")
 
-            
-        # Here we are computing one representative document per topic.
+        # Compute one representative document per topic
         self.rep_docs = self.find_representative_docs_per_topic(df, topics, embeddings, n_reps=1)
 
-        # Continue with the rest of the initialization and LLM prompting.
+        # LLM topic representations
         self.topic_representations = self.find_topic_representations()
 
     
@@ -564,8 +613,17 @@ class TopicLabeling():
             elapsed_time = end_time - start_time
             total_time += elapsed_time
             
-            print(f"Topic {topic} prediction: {elapsed_time:.2f} seconds")
-            
+            message = f"Topic {topic} prediction: {elapsed_time:.2f} seconds"
+            print(message)
+
+            # Publish progress if callback is provided
+            if self.publish_progress_callback:
+                self.publish_progress_callback(
+                    stage="find_topics",
+                    message=message,
+                    percent=3/7+((topic+1)/(7*total_topics)) # show the progress between 3/7 and 4/7
+                )
+
             # Clean up bold markers if any.
             raw_response = raw_response.replace("**", "")
             try:
