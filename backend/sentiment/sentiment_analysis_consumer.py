@@ -1,6 +1,7 @@
 import os
 import json
 import pika
+import re
 import traceback
 from readReddit import preproccess_termed_sentiment_data, load_dataframe
 from nli_aspect import run_nli_aspect_analysis
@@ -76,6 +77,9 @@ def publish_results(job_id, reply):
 
 
 def _normalize_keyword_set(custom_keywords):
+    if isinstance(custom_keywords, str):
+        custom_keywords = [custom_keywords]
+
     normalized = []
     seen = set()
     for kw in custom_keywords or []:
@@ -92,6 +96,13 @@ def _normalize_keyword_set(custom_keywords):
     return normalized
 
 
+def _keyword_in_body(keyword, body):
+    if not isinstance(keyword, str) or not keyword.strip() or not isinstance(body, str):
+        return False
+    pattern = re.compile(rf"(?<!\w){re.escape(keyword.strip())}(?!\w)", re.IGNORECASE)
+    return bool(pattern.search(body))
+
+
 def keywords_sentiment(df, topics, job_id, custom_keywords=None):
     sentiment_stats = []
 
@@ -103,7 +114,7 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
         total_custom = len(normalized_custom)
         for idx, first_kw in enumerate(normalized_custom):
             topic_num = idx + 1
-            bodies = [b for b in df["body"] if first_kw.lower() in b.lower()]
+            bodies = [b for b in df["body"] if _keyword_in_body(first_kw, b)]
             bodies = list(dict.fromkeys(bodies))[:1000]
 
             progress_percent = (idx / total_custom) if total_custom else 1
@@ -173,7 +184,7 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
         seen_keywords.add(first_kw.lower())
 
         # collect bodies that mention that first keyword
-        bodies = [b for b in df["body"] if first_kw.lower() in b.lower()]
+        bodies = [b for b in df["body"] if _keyword_in_body(first_kw, b)]
         bodies = list(dict.fromkeys(bodies))[:1000]
 
         # Publish progress

@@ -63,6 +63,7 @@ function Data() {
   const [sentimentResult, setSentimentResult] = useState(null);
   const [customKeywordsInput, setCustomKeywordsInput] = useState('');
   const [sentimentUsedCustomKeywords, setSentimentUsedCustomKeywords] = useState(false);
+  const [showWeightedMatchCounts, setShowWeightedMatchCounts] = useState(false);
   const [loadingTopic, setLoadingTopic] = useState(false);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [error, setError] = useState(null);
@@ -991,9 +992,22 @@ function Data() {
                   minCountThreshold={sentimentMinCountThreshold}
                 />
                 <div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                  <div className="form-check mb-2">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="showWeightedMatchCounts"
+                      checked={showWeightedMatchCounts}
+                      onChange={(e) => setShowWeightedMatchCounts(e.target.checked)}
+                    />
+                    <label className="form-check-label" htmlFor="showWeightedMatchCounts">
+                      Show matched post/comment counts above weighted bars
+                    </label>
+                  </div>
                   <WeightedSentimentChart
                     sentiment={sentimentResult}
                     minCountThreshold={sentimentMinCountThreshold}
+                    showMatchCounts={showWeightedMatchCounts}
                   />
                 </div>
 
@@ -1084,6 +1098,7 @@ function Data() {
                       setTopicResult(null);
                       setSentimentResult(null);
                       setCustomKeywordsInput('');
+                      setShowWeightedMatchCounts(false);
                     }}
                   >
                     New Analysis

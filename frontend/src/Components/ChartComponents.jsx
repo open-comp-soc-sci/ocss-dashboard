@@ -94,7 +94,11 @@ export function FirstKeywordSentimentChart({ sentiment, minCountThreshold = 10 }
 }
 
 
-export function WeightedSentimentChart({ sentiment, minCountThreshold = 10 }) {
+export function WeightedSentimentChart({
+  sentiment,
+  minCountThreshold = 10,
+  showMatchCounts = false
+}) {
   const chartRef = useRef(null);
 
   const normalized = (Array.isArray(sentiment) ? sentiment : []).map(item => {
@@ -116,6 +120,9 @@ export function WeightedSentimentChart({ sentiment, minCountThreshold = 10 }) {
   });
 
   const labels   = filtered.map(item => item.label);
+  const totals = filtered.map(item =>
+    (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0)
+  );
   const weighted = filtered.map(item => {
     const neg = (item.negative.count || 0) * -(item.negative.avg_score || 0);
     const pos = (item.positive.count || 0) *  (item.positive.avg_score || 0);
@@ -138,6 +145,27 @@ export function WeightedSentimentChart({ sentiment, minCountThreshold = 10 }) {
 
   const options = {
     responsive: true,
+    animation: {
+      onComplete: (anim) => {
+        if (!showMatchCounts) return;
+        const chart = anim.chart;
+        const meta = chart.getDatasetMeta(0);
+        const { ctx, chartArea } = chart;
+        ctx.save();
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        meta.data.forEach((barElement, index) => {
+          const countValue = totals[index];
+          if (typeof countValue !== 'number') return;
+          const topOfBar = Math.min(barElement.y, barElement.base);
+          const y = Math.max(topOfBar - 6, chartArea.top + 12);
+          ctx.fillText(String(countValue), barElement.x, y);
+        });
+        ctx.restore();
+      }
+    },
     scales: {
       y: { min: -1, max: 1, beginAtZero: true, title: { display: true, text: 'Weighted Score' } },
       x: { title: { display: true, text: 'Top Keyword' } }
@@ -161,7 +189,16 @@ export function WeightedSentimentChart({ sentiment, minCountThreshold = 10 }) {
 
   return (
     <div>
-      <Bar ref={chartRef} data={data} options={options} />
+      {showMatchCounts && (
+        <div className="small text-muted mb-2">
+          Numbers above bars show matched posts/comments per keyword.
+        </div>
+      )}
+      <Bar
+        ref={chartRef}
+        data={data}
+        options={options}
+      />
       <button 
         onClick={handleDownloadWeighted} 
         className="btn btn-secondary mt-2"
