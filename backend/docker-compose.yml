@@ -21,6 +21,12 @@ services:
       - "5672:5672"    # RabbitMQ message queue port
       - "15672:15672"  # RabbitMQ web UI
     restart: always
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 20s
+      retries: 20
+      start_period: 90s
 
   db:
     image: postgres:17
@@ -33,7 +39,7 @@ services:
       - db_users:/var/lib/postgresql/data
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +59,7 @@ services:
       db:
         condition: service_healthy
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "5000:5000"
     volumes:
@@ -67,12 +73,30 @@ services:
       REDIS_PORT: 6379
     command: ["./wait-for-db.sh", "db", "sh", "-c", "python create_tables.py && flask run -h 0.0.0.0"]
 
+  progress_consumer:
+    build: .
+    container_name: progress_consumer
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: ["python", "-u", "-m", "app.progress_consumer"]
+    restart: always
+
   model1:
     build: ./model1
     container_name: model1
     depends_on:
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
     restart: "no"
 
   model2:
@@ -80,7 +104,7 @@ services:
     container_name: model2
     depends_on:
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
     restart: always
 
   robertamodel:
@@ -88,7 +112,7 @@ services:
     container_name: robertamodel
     depends_on:
       rabbitmq:
-        condition: service_started
+        condition: service_healthy
     restart: always
 
 volumes:
