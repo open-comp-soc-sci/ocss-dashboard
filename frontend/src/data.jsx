@@ -61,6 +61,9 @@ function Data() {
 
   const [topicResult, setTopicResult] = useState(null);
   const [sentimentResult, setSentimentResult] = useState(null);
+  const [customKeywordsInput, setCustomKeywordsInput] = useState('');
+  const [sentimentUsedCustomKeywords, setSentimentUsedCustomKeywords] = useState(false);
+  const [showWeightedMatchCounts, setShowWeightedMatchCounts] = useState(false);
   const [loadingTopic, setLoadingTopic] = useState(false);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [error, setError] = useState(null);
@@ -285,6 +288,27 @@ function Data() {
   // figure out which chart we actually want to show
   const isSentiment = Array.isArray(sentimentResult);
   const isTopic = !isSentiment && Array.isArray(topicResult?.groups);
+
+  const sentimentEntries = Array.isArray(sentimentResult) ? sentimentResult : [];
+  const customKeywordsActive = customKeywordsInput.trim().length > 0;
+  const sentimentMinCountThreshold = sentimentUsedCustomKeywords ? 0 : 10;
+  const customKeywordNoDataCount = sentimentEntries.filter(
+    (item) => item?.error === "No matching posts/comments found for this custom keyword"
+  ).length;
+  const hasCustomKeywordNoData = customKeywordNoDataCount > 0;
+  const chartEligibleCount = sentimentEntries.filter((item) => {
+    const s = item?.sentiment?.[0]?.sentiment || {};
+    const total =
+      (s.negative?.count || 0) +
+      (s.neutral?.count || 0) +
+      (s.positive?.count || 0);
+    return total >= sentimentMinCountThreshold;
+  }).length;
+  const hasAnySentimentRows = sentimentEntries.some(
+    (item) => Array.isArray(item?.sentiment) && item.sentiment.length > 0
+  );
+  const showNoChartDataNotice =
+    isSentiment && sentimentEntries.length > 0 && chartEligibleCount === 0;
 
   // Initialize main results DataTable on mount or when dependencies change.
   useEffect(() => {
@@ -649,13 +673,22 @@ function Data() {
     setSentimentResult(null);
     setProgressMessage("Submitting job...");
     setProgressPercent(0);
+    const customKeywords = customKeywordsInput
+      .split(",")
+      .map(k => k.trim())
+      .filter(Boolean);
+    setSentimentUsedCustomKeywords(customKeywords.length > 0);
+    const normalizedCustomKeywords = new Set(customKeywords.map((k) => k.toLowerCase()));
 
     try {
       // Submit sentiment job
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic_result: topicResult })
+        body: JSON.stringify({
+          topic_result: topicResult,
+          custom_keywords: customKeywords
+        })
       });
 
       if (!response.ok) throw new Error("Failed to submit sentiment job.");
@@ -679,9 +712,17 @@ function Data() {
             const resultData = await resultRes.json();
 
             // Extract sentiment array
-            const sentimentArray = Array.isArray(resultData.result)
+            let sentimentArray = Array.isArray(resultData.result)
               ? resultData.result
               : resultData.result?.sentiment || [];
+
+            // Safety guard: when custom keywords are submitted, only show those keywords.
+            if (normalizedCustomKeywords.size > 0) {
+              sentimentArray = sentimentArray.filter((item) => {
+                const keyword = item?.sentiment?.[0]?.keyword;
+                return keyword && normalizedCustomKeywords.has(keyword.toLowerCase());
+              });
+            }
 
             setSentimentResult(sentimentArray);
             setProgressMessage("Completed");
@@ -769,6 +810,22 @@ function Data() {
     setIsTyping(true);
     setSubreddit(e.target.value);
   }
+
+  const appendCustomKeyword = (keyword) => {
+    const next = (keyword || "").trim();
+    if (!next) return;
+
+    const existing = customKeywordsInput
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+
+    const exists = existing.some((k) => k.toLowerCase() === next.toLowerCase());
+    if (exists) return;
+
+    const updated = existing.length ? `${existing.join(", ")}, ${next}` : next;
+    setCustomKeywordsInput(updated);
+  };
 
   useEffect(() => {
     if (clusteringResults?.sentiment) {
@@ -911,11 +968,47 @@ function Data() {
           </p>
 
           <div style={{ backgroundColor: '#333', borderRadius: 8, padding: '1rem', marginBottom: '2rem' }}>
+            {isSentiment && hasCustomKeywordNoData && (
+              <div className="alert alert-warning mb-3" role="alert">
+                No posts/comments matched {customKeywordNoDataCount} custom keyword
+                {customKeywordNoDataCount === 1 ? "" : "s"} in this date range.
+              </div>
+            )}
+
+            {showNoChartDataNotice && (
+              <div className="alert alert-info mb-3" role="alert">
+                {hasAnySentimentRows
+                  ? "No chart data to display: fewer than 10 classified posts/comments for matched keyword topics."
+                  : customKeywordsActive
+                    ? "No sentiment results found for the entered custom keyword(s) in this date range."
+                    : "No sentiment results found for this date range."}
+              </div>
+            )}
+
             {Array.isArray(sentimentResult) ? (
               <>
-                <FirstKeywordSentimentChart sentiment={sentimentResult} />
+                <FirstKeywordSentimentChart
+                  sentiment={sentimentResult}
+                  minCountThreshold={sentimentMinCountThreshold}
+                />
                 <div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
-                  <WeightedSentimentChart sentiment={sentimentResult} />
+                  <div className="form-check mb-2">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="showWeightedMatchCounts"
+                      checked={showWeightedMatchCounts}
+                      onChange={(e) => setShowWeightedMatchCounts(e.target.checked)}
+                    />
+                    <label className="form-check-label" htmlFor="showWeightedMatchCounts">
+                      Show matched post/comment counts above weighted bars
+                    </label>
+                  </div>
+                  <WeightedSentimentChart
+                    sentiment={sentimentResult}
+                    minCountThreshold={sentimentMinCountThreshold}
+                    showMatchCounts={showWeightedMatchCounts}
+                  />
                 </div>
 
               </>
@@ -957,9 +1050,22 @@ function Data() {
                   </div>
                 )}
               </>
-            ) : !sentimentResult ? (
-              // Sentiment step after topic clustering
+            ) : (
+              // Sentiment controls stay available after clustering so users can rerun with new keywords
               <>
+                <div className="mb-3">
+                  <label className="form-label" htmlFor="customKeywordsInput">
+                    Custom Sentiment Keywords (comma-separated, optional)
+                  </label>
+                  <input
+                    id="customKeywordsInput"
+                    type="text"
+                    className="form-control"
+                    value={customKeywordsInput}
+                    onChange={(e) => setCustomKeywordsInput(e.target.value)}
+                    placeholder="e.g. pain, surgery, medication"
+                  />
+                </div>
                 <button
                   className="btn btn-purple"
                   onClick={runSentimentAnalysis}
@@ -985,18 +1091,20 @@ function Data() {
                     {error}
                   </div>
                 )}
+                {sentimentResult && (
+                  <button
+                    className="btn btn-outline-secondary mt-3"
+                    onClick={() => {
+                      setTopicResult(null);
+                      setSentimentResult(null);
+                      setCustomKeywordsInput('');
+                      setShowWeightedMatchCounts(false);
+                    }}
+                  >
+                    New Analysis
+                  </button>
+                )}
               </>
-            ) : (
-              // All done—allow reset
-              <button
-                className="btn btn-outline-secondary"
-                onClick={() => {
-                  setTopicResult(null);
-                  setSentimentResult(null);
-                }}
-              >
-                New Analysis
-              </button>
             )}
           </div>
 
@@ -1026,6 +1134,7 @@ function Data() {
             <TopicTablesContainer
               groups={topicResult.groups}
               handleSaveResults={handleSaveResults}
+              onKeywordClick={appendCustomKeyword}
             />
 
           </div>
