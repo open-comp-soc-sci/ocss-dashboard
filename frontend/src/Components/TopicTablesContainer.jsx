@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import TopicTable from './TopicTable'; // Adjust the import path if necessary
 
-const TopicTablesContainer = ({ groups, handleSaveResults }) => {
+const TopicTablesContainer = ({ groups, handleSaveResults, onKeywordClick }) => {
   const [showPosts, setShowPosts] = useState(false);
 
   const togglePosts = () => {
@@ -22,7 +22,11 @@ const TopicTablesContainer = ({ groups, handleSaveResults }) => {
       {groups.map((group, index) => (
         <div key={index} className="group-section mt-3">
           <h4>Group {group.group}: {group.llmLabel}</h4>
-          <TopicTable group={group} showPosts={showPosts} />
+          <TopicTable
+            group={group}
+            showPosts={showPosts}
+            onKeywordClick={onKeywordClick}
+          />
         </div>
       ))}
     </div>

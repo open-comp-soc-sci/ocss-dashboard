@@ -14,7 +14,7 @@ function getBarColor(score) {
   };
 }
 
-export function FirstKeywordSentimentChart({ sentiment }) {
+export function FirstKeywordSentimentChart({ sentiment, minCountThreshold = 10 }) {
   const chartRef = useRef(null);
 
   const normalized = (Array.isArray(sentiment) ? sentiment : []).map(item => {
@@ -32,7 +32,7 @@ export function FirstKeywordSentimentChart({ sentiment }) {
 
   const filtered = normalized.filter(item => {
     const total = (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0);
-    return total >= 10;
+    return total >= minCountThreshold;
   });
 
   const labels = filtered.map(item => item.label);
@@ -94,7 +94,7 @@ export function FirstKeywordSentimentChart({ sentiment }) {
 }
 
 
-export function WeightedSentimentChart({ sentiment }) {
+export function WeightedSentimentChart({ sentiment, minCountThreshold = 10 }) {
   const chartRef = useRef(null);
 
   const normalized = (Array.isArray(sentiment) ? sentiment : []).map(item => {
@@ -112,7 +112,7 @@ export function WeightedSentimentChart({ sentiment }) {
 
   const filtered = normalized.filter(item => {
     const total = (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0);
-    return total >= 10;
+    return total >= minCountThreshold;
   });
 
   const labels   = filtered.map(item => item.label);
