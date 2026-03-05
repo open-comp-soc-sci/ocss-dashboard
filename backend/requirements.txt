@@ -11,3 +11,4 @@ pandas
 openpyxl
 pyarrow
 redis
+gunicorn
