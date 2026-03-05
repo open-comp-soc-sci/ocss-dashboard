@@ -18,4 +18,4 @@ done
 python -u create_tables.py
 
 echo "Starting Flask server..."
-exec python -u -m flask run --host=0.0.0.0 --port=5000
+exec gunicorn --workers=4 --bind=0.0.0.0:5000 "app:create_app()"
