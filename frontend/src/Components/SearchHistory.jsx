@@ -309,7 +309,7 @@ const SearchHistory = ({
             </h2>
             {searchError && <p className="text-danger mt-3">Error: {searchError}</p>}
             <div id="clear-all-container" style={{ position: 'relative' }}>
-                <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', right: '50px' }} onClick={ClearAllSearch}>
+                <button id="clear-all-btn" className="btn btn-danger" style={{ position: 'absolute', right: '50px', zIndex: 1000 }} onClick={ClearAllSearch}>
                     Clear All Searches
                 </button>
             </div>
