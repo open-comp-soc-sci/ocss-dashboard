@@ -11,7 +11,11 @@ from app.searchHistory import searchHistory_BP
 def create_app():
     app = Flask(__name__)
 
-    cors = CORS(app, resources={r"/api/*": {"origins": ["http://localhost:8001", "http://sunshine.cise.ufl.edu:8001"]}})
+    cors = CORS(app, resources={r"/api/*": {"origins": [
+        "https://sunshine.cise.ufl.edu",        # production
+        "http://localhost:8001",                  # local dev (Vite)
+        "http://localhost"                        # local dev (nginx)
+    ]}})
 
     load_dotenv()
     app.config.from_prefixed_env()

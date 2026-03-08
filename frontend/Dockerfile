@@ -1,16 +1,21 @@
-FROM node:20-alpine
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files first
 COPY package*.json ./
 
-# Install dependencies and verify vite is installed
-RUN npm install && npm ls vite
+# Install dependencies
+RUN npm install
 
-# Copy the rest of your project files
+# Copy the rest of the project files
 COPY . ./
 
-EXPOSE 8001
+# Build the app
+RUN npm run build
 
-# Use the dev script defined in package.json
-CMD ["npm", "run", "dev"]
+# Final image - just nginx serving static files
+FROM nginx:alpine
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+EXPOSE 80
