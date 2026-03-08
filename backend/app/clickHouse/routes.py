@@ -57,43 +57,84 @@ def search_list():
     if not prefix:
         return jsonify([])
 
-    # Case-insensitive matching
-    lower_prefix = prefix.lower()
-
     client = None
     try:
         client = get_pooled_client()
         # Query the dedicated `subreddits` table with case-insensitive prefix match
+        # Use a ClickHouse parameter ({prefix:String}) to safely bind the user input.
+        # The LIKE pattern is assembled server-side from the bound value via concat().
         sql = (
             "SELECT subreddit "
             "FROM subreddits "
-            f"WHERE lower(subreddit) LIKE '{lower_prefix}%' "
+            "WHERE lower(subreddit) LIKE concat(lower({prefix:String}), '%') "
             "ORDER BY subreddit ASC "
             "LIMIT 10"
         )
-        qr = client.query(sql)
+        qr = client.query(sql, parameters={"prefix": prefix})
         # Extract rows from QueryResult
         rows = getattr(qr, 'result_set', None) or getattr(qr, 'rows', None) or qr
         suggestions = [row[0] for row in rows]
         return jsonify(suggestions)
     except Exception:
-        # If table doesn't exist or any error, return empty list
         return jsonify([])
     finally:
         if client:
             release_client(client)
 
 
+def _build_feed_query(base_query: str, subreddit: str, start_date: str | None,
+                      end_date: str | None, search_value: str) -> tuple[str, dict]:
+    """
+    Appends WHERE / ORDER BY clauses to *base_query* and returns the final SQL
+    string together with a parameters dict ready for clickhouse-connect.
+
+    All user-supplied values are bound as typed ClickHouse parameters so that
+    the driver handles quoting and escaping — no f-string interpolation of
+    untrusted data anywhere.
+    """
+    conditions = []
+    parameters: dict = {}
+
+    if subreddit:
+        conditions.append("subreddit = {subreddit:String}")
+        parameters["subreddit"] = subreddit
+
+    if start_date:
+        start_date_formatted = start_date.replace("T", " ").split(".")[0]
+        conditions.append("created_utc >= toDateTime64({start_date:String}, 3)")
+        parameters["start_date"] = start_date_formatted
+
+    if end_date:
+        end_date_formatted = end_date.replace("T", " ").split(".")[0]
+        conditions.append("created_utc <= toDateTime64({end_date:String}, 3)")
+        parameters["end_date"] = end_date_formatted
+
+    if search_value:
+        # concat() keeps the wildcard characters out of the bound value so the
+        # driver never sees a string that needs special-character handling.
+        conditions.append("selftext LIKE concat('%', {search_value:String}, '%')")
+        parameters["search_value"] = search_value
+
+    # Always exclude AutoModerator — this is a static literal, not user input.
+    conditions.append("author != 'AutoModerator'")
+
+    query = base_query
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY created_utc DESC"
+    query += " LIMIT 9999999999999 OFFSET 0"
+
+    return query, parameters
+
+
 @clickHouse_BP.route("/api/get_arrow", methods=["GET"])
 def get_arrow():
     client = None
     try:
-        # Retrieve query parameters.
-        subreddit = request.args.get('subreddit', '')
-        # subreddit = subreddit.lower()
-        start_date = request.args.get('startDate', None)
-        end_date = request.args.get('endDate', None)
-        option = request.args.get('option', 'reddit_comments')  # Default to comments if not specified
+        subreddit    = request.args.get('subreddit', '')
+        start_date   = request.args.get('startDate', None)
+        end_date     = request.args.get('endDate', None)
+        option       = request.args.get('option', 'reddit_comments')
         search_value = request.args.get('search_value', '', type=str)
 
         if not option or option.strip() == '':
@@ -113,36 +154,20 @@ def get_arrow():
         elif option == "reddit_comments":
             base_query = "SELECT subreddit, author, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
         # Fix to prevent error to console
+        else:
+            return jsonify({"error": "Invalid option provided."}), 400
 
-        conditions = []
-        if subreddit:
-            conditions.append(f"subreddit = '{subreddit}'")
-        if start_date:
-            start_date_formatted = start_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
-        if end_date:
-            end_date_formatted = end_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
-        if search_value:
-            conditions.append(f"selftext LIKE '%{search_value}%'")
+        query, parameters = _build_feed_query(
+            base_query, subreddit, start_date, end_date, search_value
+        )
 
-        # Add condition to filter out posts by AutoModerator.
-        conditions.append("author != 'AutoModerator'")
-        
-        query = base_query
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY created_utc DESC"
-        query += " LIMIT 9999999999999 OFFSET 0"
-        
         client = get_pooled_client()
         if client is None:
             return jsonify({"error": "Failed to get ClickHouse client."}), 500
 
-        
         # Use query_arrow to get an Arrow Table directly.
         start_time = time.time()
-        table = client.query_arrow(query, use_strings=True)
+        table = client.query_arrow(query, parameters=parameters, use_strings=True)
         query_arrow_time = time.time() - start_time
         print(f"Query Arrow time: {query_arrow_time:.4f} seconds", flush=True)
 
@@ -183,6 +208,7 @@ def get_arrow():
     finally:
         release_client(client)
 
+
 @clickHouse_BP.route("/api/run_topic", methods=["POST"])
 def run_topic():
     try:
@@ -209,9 +235,7 @@ def run_topic():
         topic_rpc_client.send_job(message, job_id)
         
         # Return the job id to the frontend
-        return jsonify({
-            "job_id": job_id
-        }), 200
+        return jsonify({"job_id": job_id}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -225,9 +249,7 @@ def get_result(job_id):
     if result is None:
         return jsonify({"status": "processing"}), 202
 
-    return jsonify({
-        "result": json.loads(result)
-    })
+    return jsonify({"result": json.loads(result)})
 
 
 @clickHouse_BP.route("/api/progress/<job_id>")
@@ -269,25 +291,57 @@ def run_sentiment():
         SentimentAnalysisRpcClient().send_job(message, job_id)
 
         # Return the job id to the frontend
-        return jsonify({
-            "job_id": job_id
-        }), 200
+        return jsonify({"job_id": job_id}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
+def _build_export_query(base_query: str, subreddit: str, search_value: str,
+                        start_date: str | None, end_date: str | None) -> tuple[str, dict]:
+    """
+    Same pattern as _build_feed_query but for the export endpoint, which does
+    not filter by author and does not need the LIMIT clause.
+    """
+    conditions = []
+    parameters: dict = {}
+
+    if subreddit:
+        conditions.append("subreddit = {subreddit:String}")
+        parameters["subreddit"] = subreddit
+
+    if search_value:
+        # Use search_value to filter by the body/selftext column.
+        conditions.append("selftext LIKE concat('%', {search_value:String}, '%')")
+        parameters["search_value"] = search_value
+
+    if start_date:
+        start_date_formatted = start_date.replace("T", " ").split(".")[0]
+        conditions.append("created_utc >= toDateTime64({start_date:String}, 3)")
+        parameters["start_date"] = start_date_formatted
+
+    if end_date:
+        end_date_formatted = end_date.replace("T", " ").split(".")[0]
+        conditions.append("created_utc <= toDateTime64({end_date:String}, 3)")
+        parameters["end_date"] = end_date_formatted
+
+    query = base_query
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY created_utc DESC"
+
+    return query, parameters
+
+
 @clickHouse_BP.route("/api/export_data", methods=["GET"])
 def export_data():
+    client = None
     try:
-        option = request.args.get('option', default='reddit_submissions')
-        subreddit = request.args.get('subreddit', '', type=str)
-        # subreddit = subreddit.lower()
-        # Read our search parameter from a simpler key.
-        search_value = request.args.get('search_value', '', type=str)
-        start_date = request.args.get('startDate', None, type=str)
-        end_date = request.args.get('endDate', None, type=str)
+        option        = request.args.get('option', default='reddit_submissions')
+        subreddit     = request.args.get('subreddit', '', type=str)
+        search_value  = request.args.get('search_value', '', type=str)
+        start_date    = request.args.get('startDate', None, type=str)
+        end_date      = request.args.get('endDate', None, type=str)
         export_format = request.args.get('format', default='csv')
-
 
         if ',' in option:
             # If both options are selected, use a UNION ALL query.
@@ -302,31 +356,16 @@ def export_data():
             base_query = "SELECT subreddit, title, selftext, created_utc, id FROM reddit_submissions"
         elif option == "reddit_comments":
             base_query = "SELECT subreddit, '(Comment)' AS title, body AS selftext, created_utc, parent_id AS id FROM reddit_comments"
-
         else:
             return jsonify({"error": "Invalid option provided."}), 400
-        conditions = []
-        if subreddit:
-            conditions.append(f"subreddit = '{subreddit}'")
-        # Use search_value to filter by the body/selftext column.
-        if search_value:
-            conditions.append(f"selftext LIKE '%{search_value}%'")
-        if start_date:
-            start_date_formatted = start_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc >= toDateTime64('{start_date_formatted}', 3)")
-        if end_date:
-            end_date_formatted = end_date.replace("T", " ").split(".")[0]
-            conditions.append(f"created_utc <= toDateTime64('{end_date_formatted}', 3)")
 
-        query = base_query
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY created_utc DESC"
+        query, parameters = _build_export_query(
+            base_query, subreddit, search_value, start_date, end_date
+        )
 
         client = get_pooled_client()
-        table = client.query_arrow(query, use_strings=True)
+        table = client.query_arrow(query, parameters=parameters, use_strings=True)
 
-        # Process different export formats...
         if export_format == 'excel':
             df = table.to_pandas()
             import pytz
@@ -351,10 +390,11 @@ def export_data():
             output = io.StringIO()
             df.to_csv(output, index=False)
             output.seek(0)
+            filename = f"{subreddit}.csv" if subreddit else "reddit_export.csv"
             return Response(
-                output.getvalue(), 
-                mimetype='text/csv', 
-                headers={"Content-Disposition": f"attachment; filename={subreddit}.csv" if subreddit else "attachment; filename=reddit_export.csv"}
+                output.getvalue(),
+                mimetype='text/csv',
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
             )
         elif export_format == 'json':
             df = table.to_pandas()
@@ -365,7 +405,7 @@ def export_data():
                 writer.write_table(table)
             stream.seek(0)
             return Response(
-                stream.getvalue(), 
+                stream.getvalue(),
                 mimetype='application/vnd.apache.arrow.stream',
                 headers={"Content-Disposition": "attachment; filename=data.arrow"}
             )
