@@ -12,3 +12,4 @@ openpyxl
 pyarrow
 redis
 gunicorn
+requests
