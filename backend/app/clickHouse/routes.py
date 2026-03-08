@@ -76,6 +76,7 @@ def search_list():
         suggestions = [row[0] for row in rows]
         return jsonify(suggestions)
     except Exception:
+        # If table doesn't exist or any error, return empty list
         return jsonify([])
     finally:
         if client:
