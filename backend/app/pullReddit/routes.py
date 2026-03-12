@@ -1,4 +1,5 @@
-from flask import request, send_from_directory
+from flask import request, send_from_directory, jsonify
+import requests
 import os, subprocess
 from . import pullReddit_BP
     
@@ -29,4 +30,20 @@ def downloadReddit(subreddit):
         return send_from_directory(pullReddit_BP.config['REDDIT_FOLDER'], fileName, as_attachment=True)
     else:
         return "File not found", 404
-    
+
+
+@pullReddit_BP.route('/api/pullReddit/subreddit_icon/<subreddit>')
+def subreddit_icon(subreddit):
+    headers = {"User-Agent": "python:ocss:v1.0"}
+    try:
+        response = requests.get(
+            f"https://www.reddit.com/r/{subreddit}/about.json",
+            headers=headers
+        )
+        data = response.json()
+        icon = data.get("data", {}).get("community_icon", "")
+        if icon and "?" in icon:
+            icon = icon.split("?")[0]
+        return jsonify({"icon": icon})
+    except Exception:
+        return jsonify({"icon": ""})

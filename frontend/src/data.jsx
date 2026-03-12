@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ToastContainer } from 'react-toastify';
 
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, LineController,BarController,Title, Tooltip, Legend } from 'chart.js';
 
 import { Bar } from 'react-chartjs-2';
 import ReactDatePicker from 'react-datepicker';
@@ -33,6 +33,8 @@ ChartJS.register(
   BarElement,
   PointElement,
   LineElement,
+  LineController,
+  BarController,
   Title,
   Tooltip,
   Legend
@@ -350,7 +352,7 @@ function Data() {
               }
               else {
                 setDataLoadMessage(false);
-                setSubredditIcon('../public/reddit-1.svg');
+                setSubredditIcon('/reddit-1.svg');
               }
             })
             .catch(error => {
@@ -749,31 +751,44 @@ function Data() {
     }
   }, [clusteringResults]);
 
+//   const getSubredditIcon = async (subreddit) => {
+//     try {
+//       //console.log('Test Icon')
+//       if (subreddit === prevSubredditRef.current) {
+//         //console.log('Same subreddit, skipping API call');
+//         return;
+//       }
+//       //console.log('Called')
+//       const response = await fetch(`https://www.reddit.com/r/${subreddit}/about.json`);
+//       const data = await response.json();
+//       let subredditIcon = data.data.community_icon;
+
+//       // Remove query parameters from the URL by cutting off at the question mark
+//       if (subredditIcon && subredditIcon.includes('?')) {
+//         subredditIcon = subredditIcon.split('?')[0];
+//       }
+
+//       if (!subredditIcon) {
+//         setSubredditIcon('reddit-1.svg');
+//       } else {
+//         setSubredditIcon(subredditIcon);
+//       }
+//       prevSubredditRef.current = subreddit;
+//     } catch (error) {
+//       setSubredditIcon('reddit-1.svg');
+//     }
+//   };
   const getSubredditIcon = async (subreddit) => {
     try {
-      //console.log('Test Icon')
-      if (subreddit === prevSubredditRef.current) {
-        //console.log('Same subreddit, skipping API call');
-        return;
-      }
-      //console.log('Called')
-      const response = await fetch(`https://www.reddit.com/r/${subreddit}/about.json`);
+      if (subreddit === prevSubredditRef.current) return;
+
+      const response = await fetch(`/api/pullReddit/subreddit_icon/${encodeURIComponent(subreddit)}`);
       const data = await response.json();
-      let subredditIcon = data.data.community_icon;
-
-      // Remove query parameters from the URL by cutting off at the question mark
-      if (subredditIcon && subredditIcon.includes('?')) {
-        subredditIcon = subredditIcon.split('?')[0];
-      }
-
-      if (!subredditIcon) {
-        setSubredditIcon('../public/reddit-1.svg');
-      } else {
-        setSubredditIcon(subredditIcon);
-      }
+      
+      setSubredditIcon(data.icon || 'reddit-1.svg');
       prevSubredditRef.current = subreddit;
     } catch (error) {
-      setSubredditIcon('../public/reddit-1.svg');
+      setSubredditIcon('reddit-1.svg');
     }
   };
 
@@ -1122,7 +1137,7 @@ function Data() {
         <div className="row mt-4">
           <div className="col-md-12">
             <h2>Topic Clustering Results
-              <img src="../public/cluster.svg"
+              <img src="cluster.svg"
                 alt="Topic Clustering Icon"
                 style={{
                   maxWidth: '100px',
