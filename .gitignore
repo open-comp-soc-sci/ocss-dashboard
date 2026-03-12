@@ -14,3 +14,4 @@ ocss_myenv/
 frontend/dist/
 nginx/certs/*.crt
 nginx/certs/*.key
+backend/gunicorn.ctl

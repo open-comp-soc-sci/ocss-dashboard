@@ -16,6 +16,13 @@ RUN npm run build
 # Final image - just nginx serving static files
 FROM nginx:alpine
 
+RUN apk add --no-cache openssl
+
 COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 80
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
