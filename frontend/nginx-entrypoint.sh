@@ -13,4 +13,9 @@ if [ ! -f "$CERT_CRT" ] || [ ! -f "$CERT_KEY" ]; then
     -subj "${CERT_SUBJ:-/C=US/ST=Local/L=Local/O=Intranet/CN=localhost}"
 fi
 
+if [ -f /etc/nginx/templates/default.conf.template ]; then
+  : "${API_ORIGIN:=http://app:5000}"
+  envsubst '$API_ORIGIN' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf
+fi
+
 exec "$@"

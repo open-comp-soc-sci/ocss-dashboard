@@ -16,7 +16,7 @@ RUN npm run build
 # Final image - just nginx serving static files
 FROM nginx:alpine
 
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl gettext
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx-entrypoint.sh /entrypoint.sh
