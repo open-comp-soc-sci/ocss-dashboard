@@ -253,6 +253,7 @@ def callback(ch, method, properties, body):
         # publish results
         reply = {"groups":groups, "sentiment":sentiment}
         publish_results(job_id, reply)
+        print(f"[RESULTS] Published results for job {job_id}")
         publish_progress(job_id, "done", "done", 1.0)
 
         print("✅ NLI aspect analysis done.")
