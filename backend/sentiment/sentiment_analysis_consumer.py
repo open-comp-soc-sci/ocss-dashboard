@@ -117,7 +117,7 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
             bodies = [b for b in df["body"] if _keyword_in_body(first_kw, b)]
             bodies = list(dict.fromkeys(bodies))[:1000]
 
-            progress_percent = (idx / total_custom) if total_custom else 1
+            progress_percent = ((idx + 1) / total_custom) if total_custom else 1
             publish_progress(
                 job_id=job_id,
                 stage="analyzing_keyword",
@@ -188,7 +188,7 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
         bodies = list(dict.fromkeys(bodies))[:1000]
 
         # Publish progress
-        progress_percent = (idx / total_topics) if total_topics else 1
+        progress_percent = ((idx + 1) / total_topics) if total_topics else 1
         publish_progress(
             job_id=job_id,
             stage="analyzing_keyword",
@@ -253,6 +253,7 @@ def callback(ch, method, properties, body):
         # publish results
         reply = {"groups":groups, "sentiment":sentiment}
         publish_results(job_id, reply)
+        publish_progress(job_id, "done", "done", 1.0)
 
         print("✅ NLI aspect analysis done.")
     except Exception as e:
