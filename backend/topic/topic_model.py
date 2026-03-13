@@ -135,7 +135,8 @@ class TopicModeling():
             # Build the API URL and append date parameters if provided.
             print('fetching from clickhouse')
 
-            api_url = f"https://CH_HOST/api/get_arrow?subreddit={subreddit}&option={option}"
+            ch_host = os.getenv("CH_HOST", "localhost")
+            api_url = f"https://{ch_host}/api/get_arrow?subreddit={subreddit}&option={option}"
             if start_date:
                 api_url += f"&startDate={start_date}"
             if end_date:
@@ -512,7 +513,7 @@ class TopicModeling():
     def send_groups(self):
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
-                host="CH_HOST",
+                host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
                 port=5672,
                 credentials=pika.PlainCredentials("user", "password")
             )

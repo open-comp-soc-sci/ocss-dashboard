@@ -1,4 +1,5 @@
 import json
+import os
 import pandas as pd
 import requests
 import io
@@ -14,7 +15,8 @@ def load_dataframe(meta):
     # Build the API URL and append date parameters if provided.
     print('fetching from clickhouse')
 
-    api_url = f"https://CH_HOST/api/get_arrow?subreddit={subreddit}&option={option}"
+    ch_host = os.getenv("CH_HOST", "localhost")
+    api_url = f"https://{ch_host}/api/get_arrow?subreddit={subreddit}&option={option}"
     if startDate:
         api_url += f"&startDate={startDate}"
     if endDate:
@@ -87,4 +89,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

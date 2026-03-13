@@ -11,8 +11,10 @@ from app.searchHistory import searchHistory_BP
 def create_app():
     app = Flask(__name__)
 
+    ch_host = os.getenv("CH_HOST", "localhost")
     cors = CORS(app, resources={r"/api/*": {"origins": [
-        "https://CH_HOST",        # production
+        f"https://{ch_host}",                     # production
+        f"http://{ch_host}",
         "http://localhost:8001",                  # local dev (Vite)
         "http://localhost"                        # local dev (nginx)
     ]}})

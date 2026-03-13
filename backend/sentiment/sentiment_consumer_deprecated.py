@@ -8,7 +8,7 @@ import subprocess
 class ClusterPrintingTest:
     def __init__(self):
         # Connect to RabbitMQ
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="CH_HOST", port=5672, 
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host=os.getenv("RABBITMQ_HOST", "rabbitmq"), port=5672, 
                                                                        credentials=pika.PlainCredentials("user", "password")))
         channel = connection.channel()
 

@@ -8,7 +8,10 @@ export default defineConfig({
     watch: {
       usePolling: true,
     },
-    allowedHosts: ['CH_HOST'],
+    allowedHosts: [
+      'localhost',
+      ...(process.env.CH_HOST ? [process.env.CH_HOST] : [])
+    ],
     proxy: {
       '/api': {
         target: 'http://app:5000', // The backend API endpoint

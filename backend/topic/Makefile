@@ -1,4 +1,6 @@
 IP_ADDRESS := $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ollama_container)
+CH_HOST ?= localhost
+RABBITMQ_HOST ?= $(CH_HOST)
 
 .PHONY: first stop down logs build run
 
@@ -22,7 +24,7 @@ run:
 	-v ~/.cache/huggingface:/root/.cache/huggingface \
 	-v ${CURDIR}:/app \
 	-e OLLAMA_IP_ADDRESS=$(IP_ADDRESS) \
-	-e RABBITMQ_HOST="CH_HOST" \
+	-e RABBITMQ_HOST="$(RABBITMQ_HOST)" \
 	 topic_model_api
 
 

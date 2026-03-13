@@ -9,7 +9,7 @@ class SentimentClusterConsuming:
         # Connect to RabbitMQ
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
-                host="CH_HOST",
+                host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
                 port=5672, 
                 credentials=pika.PlainCredentials("user", "password")
             )
