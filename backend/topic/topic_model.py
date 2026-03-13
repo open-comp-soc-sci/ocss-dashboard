@@ -586,7 +586,7 @@ class TopicLabeling():
         self.config = config
         self.publish_progress_callback = publish_progress_callback
 
-        self.llm = Ollama(model="gemma3:27b", base_url=f"http://ollama_container:11434")
+        self.llm = Ollama(model="gemma3:27b", base_url=OLLAMA_IP)
 
         # Compute one representative document per topic
         self.rep_docs = self.find_representative_docs_per_topic(df, topics, embeddings, n_reps=1)
@@ -848,7 +848,7 @@ class GroupLabeling():
 
     def finalize_group_labels_with_llm(self):
         labels = {}
-        llm = Ollama(model="gemma3:27b", base_url="http://ollama_container:11434", temperature=0.1)
+        llm = Ollama(model="gemma3:27b", base_url=OLLAMA_IP, temperature=0.1)
         pattern = r"(?<=Group Label: )(.*)"
         
         for group, prompt in tqdm(self.group_prompts.items(), desc="LLM group labels"):
