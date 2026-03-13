@@ -5,6 +5,7 @@ import pyarrow.ipc as ipc
 from queue import Queue
 import os
 import json
+import socket
 from . import clickHouse_BP
 from ..rpc_client import TopicModelRpcClient  # Import the RPC client modules
 from ..rpc_client import SentimentAnalysisRpcClient 
@@ -49,6 +50,23 @@ def get_pooled_client():
 def release_client(client):
     if client:
         connection_pool.put(client)
+
+
+def _request_client_id():
+    """
+    Client identity provided by frontend. Falls back for backward compatibility.
+    """
+    client_id = (request.headers.get("X-Client-ID") or request.args.get("client_id") or "").strip()
+    if client_id:
+        return client_id
+    return os.getenv("CLIENT_ID") or socket.gethostname()
+
+
+def _is_authorized_for_job(job_id: str):
+    owner = redis.get_job_owner(job_id)
+    if not owner:
+        return True
+    return owner == _request_client_id()
 
 
 @clickHouse_BP.route('/api/search_list', methods=['GET'])
@@ -191,10 +209,12 @@ def run_topic():
 
         # generate job id to track progress on the frontend
         job_id = str(uuid.uuid4())
+        requester_client_id = _request_client_id()
+        redis.set_job_owner(job_id, requester_client_id)
 
         parameters = {
             "job_id": job_id,
-            "client_id": os.getenv("CLIENT_ID") or __import__("socket").gethostname(),
+            "client_id": os.getenv("CLIENT_ID") or socket.gethostname(),
             "data_source": request_data.get("data_source", "api"),
             "subreddit": request_data.get("subreddit", ""),
             "option": request_data.get("option", "reddit_submissions"),
@@ -220,6 +240,9 @@ def run_topic():
 
 @clickHouse_BP.route("/api/get_result/<job_id>")
 def get_result(job_id):
+    if not _is_authorized_for_job(job_id):
+        return jsonify({"error": "This job belongs to a different client."}), 403
+
     # Fetch result from Redis
     result = redis.get_result(job_id)
 
@@ -233,6 +256,9 @@ def get_result(job_id):
 
 @clickHouse_BP.route("/api/progress/<job_id>")
 def get_progress(job_id):
+    if not _is_authorized_for_job(job_id):
+        return jsonify({"error": "This job belongs to a different client."}), 403
+
     # Fetch progress from Redis
     progress = redis.get_progress(job_id)
     
@@ -260,11 +286,13 @@ def run_sentiment():
 
         # generate job id to track progress on the frontend
         job_id = str(uuid.uuid4())
+        requester_client_id = _request_client_id()
+        redis.set_job_owner(job_id, requester_client_id)
 
         # Forward the existing topic payload and optionally inject custom keywords.
         payload = dict(topic_result)
         payload["job_id"] = job_id
-        payload["client_id"] = os.getenv("CLIENT_ID") or __import__("socket").gethostname()
+        payload["client_id"] = os.getenv("CLIENT_ID") or socket.gethostname()
         payload["custom_keywords"] = custom_keywords
 
         message = json.dumps(payload)
@@ -378,6 +406,8 @@ def export_data():
         return jsonify({"error": str(e)}), 500
     finally:
         release_client(client)
+
+
 def _decode_cached_payload(value):
     """
     Support both old double-encoded payloads and normal JSON payloads.
