@@ -6,7 +6,7 @@ include $(ENV_FILE)
 export
 endif
 
-IP_ADDRESS := $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ollama_container)
+OLLAMA_HOST ?= ollama_container
 CH_HOST ?= localhost
 RABBITMQ_HOST ?= $(CH_HOST)
 
@@ -25,6 +25,7 @@ build:
 
 run:
 	-docker network create ocss
+	-docker network connect ocss $(OLLAMA_HOST)
 	docker run -d \
 	--gpus all \
 	--name topic_model_api_container \
@@ -32,7 +33,7 @@ run:
 	-v ~/.cache/huggingface:/root/.cache/huggingface \
 	-v ${CURDIR}:/app \
 	--env-file "$(ENV_FILE)" \
-	-e OLLAMA_IP_ADDRESS=$(IP_ADDRESS) \
+	-e OLLAMA_IP_ADDRESS=http://$(OLLAMA_HOST):11434 \
 	-e RABBITMQ_HOST="$(RABBITMQ_HOST)" \
 	 topic_model_api
 
