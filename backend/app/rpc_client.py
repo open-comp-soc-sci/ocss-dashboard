@@ -5,7 +5,7 @@ import pika
 def _rabbitmq_connection_parameters():
     """Build RabbitMQ connection params from environment settings."""
     if os.getenv("RUNNINGLOCAL") == "true":
-        rabbitmq_host = os.getenv("RABBITMQ_HOST", "CH_HOST")
+        rabbitmq_host = os.getenv("RABBITMQ_HOST", "rabbitmq")
     else:
         rabbitmq_host = os.getenv("RABBITMQ_HOST", "rabbitmq")
 

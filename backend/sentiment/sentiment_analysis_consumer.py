@@ -7,7 +7,7 @@ from readReddit import preproccess_termed_sentiment_data, load_dataframe
 from nli_aspect import run_nli_aspect_analysis
 
 # RabbitMQ setup
-rabbitmq_host = os.getenv('RABBITMQ_HOST','CH_HOST')
+rabbitmq_host = os.getenv('RABBITMQ_HOST','rabbitmq')
 rabbitmq_port = int(os.getenv('RABBITMQ_PORT','5672'))
 rabbitmq_user = os.getenv('RABBITMQ_USER','user')
 rabbitmq_pass = os.getenv('RABBITMQ_PASS','password')
