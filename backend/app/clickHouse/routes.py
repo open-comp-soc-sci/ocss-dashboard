@@ -227,7 +227,7 @@ def get_result(job_id):
         return jsonify({"status": "processing"}), 202
 
     return jsonify({
-        "result": json.loads(result)
+        "result": _decode_cached_payload(result)
     })
 
 
@@ -239,7 +239,7 @@ def get_progress(job_id):
     if progress is None:
         return jsonify({"status": "processing"}), 202
     
-    return jsonify(json.loads(progress))
+    return jsonify(_decode_cached_payload(progress))
 
 
 @clickHouse_BP.route("/api/run_sentiment", methods=["POST"])
@@ -378,3 +378,17 @@ def export_data():
         return jsonify({"error": str(e)}), 500
     finally:
         release_client(client)
+def _decode_cached_payload(value):
+    """
+    Support both old double-encoded payloads and normal JSON payloads.
+    """
+    cur = value
+    for _ in range(2):
+        if isinstance(cur, str):
+            try:
+                cur = json.loads(cur)
+            except Exception:
+                break
+        else:
+            break
+    return cur

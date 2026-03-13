@@ -47,7 +47,8 @@ def set_result(job_id: str, result: dict):
     Store the final job result in Redis with TTL.
     """
     r = get_redis_connection()
-    r.set(f"result:{job_id}", json.dumps(result), ex=RESULT_TTL_SECONDS)
+    payload = result if isinstance(result, str) else json.dumps(result)
+    r.set(f"result:{job_id}", payload, ex=RESULT_TTL_SECONDS)
 
 
 def get_result(job_id: str):
@@ -69,7 +70,8 @@ def set_progress(job_id: str, progress: dict):
     Store a job's progress update in Redis with TTL.
     """
     r = get_redis_connection()
-    r.set(f"progress:{job_id}", json.dumps(progress), ex=PROGRESS_TTL_SECONDS)
+    payload = progress if isinstance(progress, str) else json.dumps(progress)
+    r.set(f"progress:{job_id}", payload, ex=PROGRESS_TTL_SECONDS)
 
 
 def get_progress(job_id: str):

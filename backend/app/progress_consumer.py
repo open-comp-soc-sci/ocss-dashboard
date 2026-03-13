@@ -8,6 +8,25 @@ import traceback
 from app.redis_client import set_progress, get_progress, set_result, get_result
 
 
+def _coerce_json(value):
+    """Decode payloads that may already be dicts or JSON strings (possibly double-encoded)."""
+    cur = value
+    for _ in range(2):
+        if isinstance(cur, str):
+            try:
+                cur = json.loads(cur)
+            except Exception:
+                break
+        else:
+            break
+    return cur
+
+
+def _queue_names(base: str, client_id: str):
+    # Keep backward compatibility with workers that still publish to legacy queue names.
+    return [f"{base}_{client_id}", base]
+
+
 def create_connection():
     """Create and return a RabbitMQ connection."""
     rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
@@ -38,8 +57,9 @@ def start_progress_listener():
             channel = connection.channel()
 
             client_id = os.getenv('CLIENT_ID') or socket.gethostname()
-            progress_queue = f"progress_queue_{client_id}"
-            channel.queue_declare(queue=progress_queue, durable=True)
+            progress_queues = _queue_names("progress_queue", client_id)
+            for queue_name in progress_queues:
+                channel.queue_declare(queue=queue_name, durable=True)
 
             def callback(ch, method, properties, body):
                 try:
@@ -48,9 +68,10 @@ def start_progress_listener():
 
                     if job_id:
                         # Only set progress if result is not done yet
-                        current = get_progress(job_id)
-                        if not current or json.loads(current).get("stage") != "done":
-                            set_progress(job_id, json.dumps(data))
+                        current = _coerce_json(get_progress(job_id))
+                        current_stage = current.get("stage") if isinstance(current, dict) else None
+                        if current_stage != "done":
+                            set_progress(job_id, data)
                             print(f"Progress update for {job_id}")
 
                 except Exception as e:
@@ -60,12 +81,13 @@ def start_progress_listener():
                 finally:
                     ch.basic_ack(delivery_tag=method.delivery_tag)
 
-            channel.basic_consume(
-                queue=progress_queue,
-                on_message_callback=callback
-            )
+            for queue_name in progress_queues:
+                channel.basic_consume(
+                    queue=queue_name,
+                    on_message_callback=callback
+                )
 
-            print(" [*] Listening for progress updates...")
+            print(f" [*] Listening for progress updates on queues: {progress_queues}")
             channel.start_consuming()
 
         except Exception as e:
@@ -82,8 +104,9 @@ def start_results_listener():
             connection = create_connection()
             channel = connection.channel()
             client_id = os.getenv('CLIENT_ID') or socket.gethostname()
-            results_queue = f"results_queue_{client_id}"
-            channel.queue_declare(queue=results_queue, durable=True)
+            results_queues = _queue_names("results_queue", client_id)
+            for queue_name in results_queues:
+                channel.queue_declare(queue=queue_name, durable=True)
 
             def callback(ch, method, properties, body):
                 try:
@@ -93,7 +116,7 @@ def start_results_listener():
                         return
 
                     result_data = json.loads(body)
-                    set_result(job_id, json.dumps(result_data))
+                    set_result(job_id, result_data)
                     print(f"Result stored for job {job_id}")
 
                     # Mark progress as done
@@ -103,7 +126,7 @@ def start_results_listener():
                         "message": "done",
                         "percent": 1
                     }
-                    set_progress(job_id, json.dumps(progress_data))
+                    set_progress(job_id, progress_data)
                     print(f"Progress marked done for job {job_id}")
 
                 except Exception as e:
@@ -113,12 +136,13 @@ def start_results_listener():
                 finally:
                     ch.basic_ack(delivery_tag=method.delivery_tag)
 
-            channel.basic_consume(
-                queue=results_queue,
-                on_message_callback=callback
-            )
+            for queue_name in results_queues:
+                channel.basic_consume(
+                    queue=queue_name,
+                    on_message_callback=callback
+                )
 
-            print(" [*] Listening for results...")
+            print(f" [*] Listening for results on queues: {results_queues}")
             channel.start_consuming()
 
         except Exception as e:
