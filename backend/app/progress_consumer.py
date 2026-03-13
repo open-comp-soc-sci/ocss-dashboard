@@ -1,4 +1,5 @@
 import pika
+import socket
 import os
 import json
 import threading
@@ -13,8 +14,9 @@ def create_connection():
     rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
     rabbitmq_user = os.getenv('RABBITMQ_USER', 'user')
     rabbitmq_pass = os.getenv('RABBITMQ_PASS', 'password')
+    client_id = os.getenv('CLIENT_ID') or socket.gethostname()
 
-    print(f"Connecting to RabbitMQ at {rabbitmq_host}:{rabbitmq_port} as {rabbitmq_user}")
+    print(f"Connecting to RabbitMQ at {rabbitmq_host}:{rabbitmq_port} as {rabbitmq_user} (client {client_id})")
 
     credentials = pika.PlainCredentials(rabbitmq_user, rabbitmq_pass)
 
@@ -35,7 +37,9 @@ def start_progress_listener():
             connection = create_connection()
             channel = connection.channel()
 
-            channel.queue_declare(queue="progress_queue", durable=True)
+            client_id = os.getenv('CLIENT_ID') or socket.gethostname()
+            progress_queue = f"progress_queue_{client_id}"
+            channel.queue_declare(queue=progress_queue, durable=True)
 
             def callback(ch, method, properties, body):
                 try:
@@ -57,7 +61,7 @@ def start_progress_listener():
                     ch.basic_ack(delivery_tag=method.delivery_tag)
 
             channel.basic_consume(
-                queue="progress_queue",
+                queue=progress_queue,
                 on_message_callback=callback
             )
 
@@ -77,7 +81,9 @@ def start_results_listener():
         try:
             connection = create_connection()
             channel = connection.channel()
-            channel.queue_declare(queue="results_queue", durable=True)
+            client_id = os.getenv('CLIENT_ID') or socket.gethostname()
+            results_queue = f"results_queue_{client_id}"
+            channel.queue_declare(queue=results_queue, durable=True)
 
             def callback(ch, method, properties, body):
                 try:
@@ -108,7 +114,7 @@ def start_results_listener():
                     ch.basic_ack(delivery_tag=method.delivery_tag)
 
             channel.basic_consume(
-                queue="results_queue",
+                queue=results_queue,
                 on_message_callback=callback
             )
 

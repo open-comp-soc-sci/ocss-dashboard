@@ -26,7 +26,8 @@ queue_name = 'sentiment_analysis_queue'
 channel.queue_declare(queue=queue_name, durable=True)
 
 
-def publish_progress(job_id, stage, message, percent):
+def publish_progress(job_id, stage, message, percent, client_id=None):
+    client_id = client_id or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
             host=rabbitmq_host,
@@ -35,7 +36,8 @@ def publish_progress(job_id, stage, message, percent):
         )
     )
     channel = connection.channel()
-    channel.queue_declare(queue="progress_queue", durable=True)
+    progress_queue = f"progress_queue_{client_id}"
+    channel.queue_declare(queue=progress_queue, durable=True)
 
     progress_message = {
         "job_id": job_id,
@@ -46,7 +48,7 @@ def publish_progress(job_id, stage, message, percent):
 
     channel.basic_publish(
         exchange="",
-        routing_key="progress_queue",
+        routing_key=progress_queue,
         body=json.dumps(progress_message),
         properties=pika.BasicProperties(delivery_mode=2)
     )
@@ -54,7 +56,8 @@ def publish_progress(job_id, stage, message, percent):
     connection.close()
 
 
-def publish_results(job_id, reply):
+def publish_results(job_id, reply, client_id=None):
+    client_id = client_id or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
             host=rabbitmq_host,
@@ -63,10 +66,11 @@ def publish_results(job_id, reply):
         )
     )
     channel = connection.channel()
-    channel.queue_declare(queue="results_queue", durable=True)
+    results_queue = f"results_queue_{client_id}"
+    channel.queue_declare(queue=results_queue, durable=True)
     channel.basic_publish(
         exchange='',
-        routing_key="results_queue",
+        routing_key=results_queue,
         body=json.dumps(reply),
         properties=pika.BasicProperties(
             delivery_mode=2,
@@ -103,7 +107,7 @@ def _keyword_in_body(keyword, body):
     return bool(pattern.search(body))
 
 
-def keywords_sentiment(df, topics, job_id, custom_keywords=None):
+def keywords_sentiment(df, topics, job_id, custom_keywords=None, client_id=None):
     sentiment_stats = []
 
     seen_keywords = set()
@@ -122,7 +126,8 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
                 job_id=job_id,
                 stage="analyzing_keyword",
                 message=f"Keyword {idx+1}/{total_custom}: analyzing '{first_kw}'",
-                percent=progress_percent
+                percent=progress_percent,
+                client_id=client_id
             )
 
             if not bodies:
@@ -193,7 +198,8 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None):
             job_id=job_id,
             stage="analyzing_keyword",
             message=f"Topic {idx+1}/{total_topics}: analyzing keyword '{first_kw}'",
-            percent=progress_percent
+            percent=progress_percent,
+            client_id=client_id
         )
 
         print(f"[NLI] Topic {topic_num}: analyzing first keyword "
@@ -237,7 +243,8 @@ def callback(ch, method, properties, body):
         ch.basic_ack(delivery_tag=method.delivery_tag)
         return
 
-    publish_progress(job_id, "started", "Starting sentiment analysis", 0.0)
+    client_id = (grouping.get("client_id") if isinstance(grouping, dict) else None) or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
+    publish_progress(job_id, "started", "Starting sentiment analysis", 0.0, client_id=client_id)
 
     try:
         df = load_dataframe(meta)
@@ -247,14 +254,15 @@ def callback(ch, method, properties, body):
             df,
             all_topics,
             job_id,
-            custom_keywords=custom_keywords
+            custom_keywords=custom_keywords,
+            client_id=client_id
         )
 
         # publish results
         reply = {"groups":groups, "sentiment":sentiment}
-        publish_results(job_id, reply)
+        publish_results(job_id, reply, client_id=client_id)
         print(f"[RESULTS] Published results for job {job_id}")
-        publish_progress(job_id, "done", "done", 1.0)
+        publish_progress(job_id, "done", "done", 1.0, client_id=client_id)
 
         print("✅ NLI aspect analysis done.")
     except Exception as e:

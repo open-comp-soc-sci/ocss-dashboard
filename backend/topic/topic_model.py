@@ -311,6 +311,7 @@ class TopicModeling():
 
 
     def publish_progress(self, stage, message, percent):
+        client_id = self.config.get("client_id") or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
                 host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
@@ -321,7 +322,8 @@ class TopicModeling():
             )
         )
         channel = connection.channel()
-        channel.queue_declare(queue="progress_queue", durable=True)
+        progress_queue = f"progress_queue_{client_id}"
+        channel.queue_declare(queue=progress_queue, durable=True)
 
         progress_message = {
             "job_id": self.config.get("job_id"),
@@ -332,7 +334,7 @@ class TopicModeling():
 
         channel.basic_publish(
             exchange="",
-            routing_key="progress_queue",
+            routing_key=progress_queue,
             body=json.dumps(progress_message),
             properties=pika.BasicProperties(delivery_mode=2)
         )
@@ -512,15 +514,20 @@ class TopicModeling():
 
 
     def send_groups(self):
+        client_id = self.config.get("client_id") or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
                 host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
                 port=5672,
-                credentials=pika.PlainCredentials("user", "password")
+                credentials=pika.PlainCredentials(
+                    os.getenv("RABBITMQ_USER", "user"),
+                    os.getenv("RABBITMQ_PASS", "password")
+                )
             )
         )
         channel = connection.channel()
-        channel.queue_declare(queue="grouping_results", durable=True)
+        results_queue = f"results_queue_{client_id}"
+        channel.queue_declare(queue=results_queue, durable=True)
         
         # Create a meta-data dictionary with additional details.
         meta_data = {
@@ -560,7 +567,7 @@ class TopicModeling():
         
         channel.basic_publish(
             exchange="",
-            routing_key="grouping_results",
+            routing_key=results_queue,
             body=message,
             properties=pika.BasicProperties(delivery_mode=2)
         )

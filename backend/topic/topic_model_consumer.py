@@ -41,6 +41,8 @@ def callback(ch, method, properties, body):
     # Update the configuration with any parameters provided in the message.
     if "job_id" in data:
         config_copy["job_id"] = data["job_id"]
+    if "client_id" in data:
+        config_copy["client_id"] = data["client_id"]
     if "data_source" in data:
         config_copy["data_source"] = data["data_source"]
     if "subreddit" in data:
@@ -65,9 +67,12 @@ def callback(ch, method, properties, body):
 
         # Publish the reply to the callback queue specified in properties.reply_to
         response_body = json.dumps(result_message)
+        client_id = config_copy.get("client_id") or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
+        results_queue = f"results_queue_{client_id}"
+        channel.queue_declare(queue=results_queue, durable=True)
         ch.basic_publish(
             exchange='',
-            routing_key='results_queue', # send the data to the results queue
+            routing_key=results_queue, # send the data to the results queue
             properties=pika.BasicProperties(
                 correlation_id=data["job_id"], # get the generated job id
                 delivery_mode=2
