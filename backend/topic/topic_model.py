@@ -46,7 +46,14 @@ plt.rcParams['font.sans-serif'] = "CMU Sans Serif"
 plt.rcParams['font.family'] = "sans-serif"
 plt.rcParams['mathtext.fontset'] = 'cm'
 
-OLLAMA_IP = os.getenv("OLLAMA_IP_ADDRESS", "http://localhost:11434")  # Default if not set
+def _normalize_ollama_base(url: str) -> str:
+    if not url:
+        return "http://localhost:11434"
+    if "://" not in url:
+        return f"http://{url}"
+    return url
+
+OLLAMA_IP = _normalize_ollama_base(os.getenv("OLLAMA_IP_ADDRESS", "http://localhost:11434"))
 
 # Updated configuration
 config = {
