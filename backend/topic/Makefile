@@ -1,3 +1,11 @@
+REPO_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null)
+ENV_FILE ?= $(if $(REPO_ROOT),$(REPO_ROOT)/.env,.env)
+
+ifneq ("$(wildcard $(ENV_FILE))","")
+include $(ENV_FILE)
+export
+endif
+
 IP_ADDRESS := $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ollama_container)
 CH_HOST ?= localhost
 RABBITMQ_HOST ?= $(CH_HOST)
@@ -23,6 +31,7 @@ run:
 	--network ocss \
 	-v ~/.cache/huggingface:/root/.cache/huggingface \
 	-v ${CURDIR}:/app \
+	--env-file "$(ENV_FILE)" \
 	-e OLLAMA_IP_ADDRESS=$(IP_ADDRESS) \
 	-e RABBITMQ_HOST="$(RABBITMQ_HOST)" \
 	 topic_model_api
