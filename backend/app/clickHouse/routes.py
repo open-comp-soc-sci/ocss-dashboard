@@ -194,6 +194,7 @@ def run_topic():
 
         parameters = {
             "job_id": job_id,
+            "client_id": os.getenv("CLIENT_ID") or __import__("socket").gethostname(),
             "data_source": request_data.get("data_source", "api"),
             "subreddit": request_data.get("subreddit", ""),
             "option": request_data.get("option", "reddit_submissions"),
@@ -263,6 +264,7 @@ def run_sentiment():
         # Forward the existing topic payload and optionally inject custom keywords.
         payload = dict(topic_result)
         payload["job_id"] = job_id
+        payload["client_id"] = os.getenv("CLIENT_ID") or __import__("socket").gethostname()
         payload["custom_keywords"] = custom_keywords
 
         message = json.dumps(payload)

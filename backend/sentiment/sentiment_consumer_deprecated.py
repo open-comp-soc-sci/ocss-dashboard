@@ -13,10 +13,12 @@ class ClusterPrintingTest:
         channel = connection.channel()
 
         # Declare the same queue
-        channel.queue_declare(queue="grouping_results", durable=True)
+        client_id = os.getenv("CLIENT_ID") or __import__("socket").gethostname()
+        results_queue = f"results_queue_{client_id}"
+        channel.queue_declare(queue=results_queue, durable=True)
 
         # Set up the callback for receiving messages
-        channel.basic_consume(queue="grouping_results", on_message_callback=self.receive_groups)
+        channel.basic_consume(queue=results_queue, on_message_callback=self.receive_groups)
 
         print(" [*] Waiting for cluster messages. To exit, press CTRL+C", flush=True)
         channel.start_consuming()
