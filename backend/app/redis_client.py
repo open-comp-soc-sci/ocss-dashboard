@@ -9,6 +9,7 @@ REDIS_DB   = int(os.getenv("REDIS_DB", 0))
 
 RESULT_TTL_SECONDS = 24 * 60 * 60  # 1 day for final results
 PROGRESS_TTL_SECONDS = 24 * 60 * 60  # 1 day for progress updates
+JOB_OWNER_TTL_SECONDS = 24 * 60 * 60  # 1 day for job ownership
 
 _redis_instance = None
 
@@ -83,3 +84,22 @@ def get_progress(job_id: str):
     if data is None:
         return None
     return json.loads(data)
+
+
+# -----------------------------
+# Job owner helpers
+# -----------------------------
+def set_job_owner(job_id: str, client_id: str):
+    """
+    Store which client created the job, used to gate progress/result reads.
+    """
+    r = get_redis_connection()
+    r.set(f"job_owner:{job_id}", client_id, ex=JOB_OWNER_TTL_SECONDS)
+
+
+def get_job_owner(job_id: str):
+    """
+    Retrieve the client that owns the job.
+    """
+    r = get_redis_connection()
+    return r.get(f"job_owner:{job_id}")
