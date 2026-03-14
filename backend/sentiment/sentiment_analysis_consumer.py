@@ -267,7 +267,7 @@ def callback(ch, method, properties, body):
         print("✅ NLI aspect analysis done.")
     except Exception as e:
         print("Error in consumer:", e)
-        publish_progress(job_id, "error", "Error during sentiment analysis", 0.0)
+        publish_progress(job_id, "error", "Error during sentiment analysis", 0.0, client_id=client_id)
         traceback.print_exc()
     finally:
         ch.basic_ack(delivery_tag=method.delivery_tag)
