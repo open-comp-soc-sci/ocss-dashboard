@@ -23,7 +23,13 @@ _nli = pipeline(
     device=device
 )
 
-def run_nli_aspect_analysis(terms, sectioned_bodies, topics, batch_size=16):
+def run_nli_aspect_analysis(
+    terms,
+    sectioned_bodies,
+    topics,
+    batch_size=16,
+    max_examples_per_term=25
+):
     """
     For each (term, topic), batch all its example texts in one zero‑shot call.
     Returns a dict keyed by (term, topic) → {occurrences, positive/neutral/negative buckets}.
@@ -46,23 +52,36 @@ def run_nli_aspect_analysis(terms, sectioned_bodies, topics, batch_size=16):
             hypothesis_template=hypothesis,
             batch_size=batch_size
         )
+        if isinstance(out, dict):
+            out = [out]
+
+        key = (term, topic)
+        if key not in stats:
+            stats[key] = {
+                "occurrences": 0,
+                "matched_count": len(bodies),
+                "sampled_count": len(texts),
+                "positive": {"count": 0, "avg_score": 0.0},
+                "neutral":  {"count": 0, "avg_score": 0.0},
+                "negative": {"count": 0, "avg_score": 0.0},
+                "examples": []
+            }
 
         # out is a list of { labels: [...], scores: [...] }
-        for res in out:
+        for text, res in zip(texts, out):
             # pick top label
             lbl, scr = res["labels"][0], res["scores"][0]
-            key = (term, topic)
-            if key not in stats:
-                stats[key] = {
-                    "occurrences": 0,
-                    "positive": {"count": 0, "avg_score": 0.0},
-                    "neutral":  {"count": 0, "avg_score": 0.0},
-                    "negative": {"count": 0, "avg_score": 0.0},
-                }
             bucket = stats[key][lbl]
             stats[key]["occurrences"] += 1
             bucket["count"]     += 1
             bucket["avg_score"] += scr
+
+            if len(stats[key]["examples"]) < max_examples_per_term:
+                stats[key]["examples"].append({
+                    "label": lbl,
+                    "score": float(scr),
+                    "text": text
+                })
 
     # finalize averages
     for v in stats.values():
