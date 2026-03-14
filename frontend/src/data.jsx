@@ -63,12 +63,38 @@ function Data() {
 
   const [topicResult, setTopicResult] = useState(null);
   const [sentimentResult, setSentimentResult] = useState(null);
+  const [topicJobId, setTopicJobId] = useState(null);
+  const [sentimentJobId, setSentimentJobId] = useState(null);
   const [customKeywordsInput, setCustomKeywordsInput] = useState('');
   const [sentimentUsedCustomKeywords, setSentimentUsedCustomKeywords] = useState(false);
   const [showWeightedMatchCounts, setShowWeightedMatchCounts] = useState(false);
   const [loadingTopic, setLoadingTopic] = useState(false);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [error, setError] = useState(null);
+  const CLIENT_ID_STORAGE_KEY = "ocss_client_id";
+  const clientIdRef = useRef(null);
+
+  const getOrCreateClientId = () => {
+    let clientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+    if (!clientId) {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        clientId = window.crypto.randomUUID();
+      } else {
+        clientId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      }
+      localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId);
+    }
+    return clientId;
+  };
+
+  if (!clientIdRef.current) {
+    clientIdRef.current = getOrCreateClientId();
+  }
+
+  const withClientHeaders = (headers = {}) => ({
+    ...headers,
+    "X-Client-ID": clientIdRef.current
+  });
 
 
   // Search History Variables
@@ -137,7 +163,6 @@ function Data() {
       const table = await Arrow.tableFromIPC(new Uint8Array(arrayBuffer));
 
       // Debug the schema to verify column names.
-      //console.log("Arrow table schema:", table.schema.fields.map(f => f.name));
 
       // Instead of converting all rows, only convert the ones for the requested page.
       const paginatedData = [];
@@ -189,6 +214,39 @@ function Data() {
       background: `hsla(${hue}, 70%, 50%, 0.5)`,
       border: `hsl(${hue}, 70%, 50%)`
     };
+  };
+
+  const getSentimentBadgeClass = (label) => {
+    switch ((label || "").toLowerCase()) {
+      case "positive":
+        return "badge text-bg-success";
+      case "negative":
+        return "badge text-bg-danger";
+      default:
+        return "badge text-bg-secondary";
+    }
+  };
+
+  const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const renderHighlightedKeywordText = (text, keyword) => {
+    const safeText = typeof text === "string" ? text : "";
+    const safeKeyword = typeof keyword === "string" ? keyword.trim() : "";
+    if (!safeKeyword) return safeText;
+
+    const pattern = new RegExp(`(${escapeRegExp(safeKeyword)})`, "gi");
+    const parts = safeText.split(pattern);
+    const keywordLower = safeKeyword.toLowerCase();
+
+    return parts.map((part, idx) => (
+      part.toLowerCase() === keywordLower ? (
+        <mark key={idx} style={{ backgroundColor: "#ffd54f", color: "#111", padding: "0 2px" }}>
+          {part}
+        </mark>
+      ) : (
+        <React.Fragment key={idx}>{part}</React.Fragment>
+      )
+    ));
   };
 
   const getBackgroundColor = (index) => `rgba(${baseColors[index % baseColors.length]}, 0.2)`;
@@ -309,6 +367,24 @@ function Data() {
   const hasAnySentimentRows = sentimentEntries.some(
     (item) => Array.isArray(item?.sentiment) && item.sentiment.length > 0
   );
+  const sentimentEvidenceEntries = sentimentEntries.map((item) => {
+    const keyword = item?.sentiment?.[0]?.keyword || "N/A";
+    const sentiment = item?.sentiment?.[0]?.sentiment || {};
+    const examples = Array.isArray(sentiment.examples) ? sentiment.examples : [];
+    const total =
+      (sentiment.negative?.count || 0) +
+      (sentiment.neutral?.count || 0) +
+      (sentiment.positive?.count || 0);
+
+    return {
+      topicNumber: item?.topicNumber,
+      keyword,
+      total,
+      sampledCount: sentiment.sampled_count || 0,
+      matchedCount: sentiment.matched_count || 0,
+      examples
+    };
+  }).filter((entry) => entry.examples.length > 0 || entry.total > 0);
   const showNoChartDataNotice =
     isSentiment && sentimentEntries.length > 0 && chartEligibleCount === 0;
 
@@ -339,7 +415,6 @@ function Data() {
           fetchArrowData(start, length, draw, search.value, setError)
             .then(apiData => {
               callback(apiData);
-              //console.log(apiData.recordsFiltered)
               if (apiData.recordsFiltered <= 3000 && apiData.recordsFiltered > 0) {
                 setDataMessage(true);
               } else {
@@ -617,7 +692,7 @@ function Data() {
             // Submit the job
             const response = await fetch("/api/run_topic", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: withClientHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({
                     subreddit,
                     option: options,
@@ -629,11 +704,18 @@ function Data() {
             if (!response.ok) throw new Error("Failed to submit topic job.");
 
             const { job_id } = await response.json();
+            setTopicJobId(job_id);
 
             // Poll for progress
             const interval = setInterval(async () => {
                 try {
-                    const progressRes = await fetch(`/api/progress/${job_id}`);
+                    const progressRes = await fetch(`/api/progress/${job_id}`, {
+                      headers: withClientHeaders()
+                    });
+                    if (!progressRes.ok) {
+                      const errorPayload = await progressRes.json().catch(() => ({}));
+                      throw new Error(errorPayload.error || `Progress check failed (${progressRes.status})`);
+                    }
                     const progress = await progressRes.json();
 
                     if (progress.message) setProgressMessage(progress.message);
@@ -643,7 +725,13 @@ function Data() {
                     if (progress.stage === "done") {
                         clearInterval(interval);
 
-                        const resultRes = await fetch(`/api/get_result/${job_id}`);
+                        const resultRes = await fetch(`/api/get_result/${job_id}`, {
+                          headers: withClientHeaders()
+                        });
+                        if (!resultRes.ok) {
+                          const errorPayload = await resultRes.json().catch(() => ({}));
+                          throw new Error(errorPayload.error || `Result fetch failed (${resultRes.status})`);
+                        }
                         const resultData = await resultRes.json();
 
                         setTopicResult(resultData.result);
@@ -686,7 +774,7 @@ function Data() {
       // Submit sentiment job
       const response = await fetch("/api/run_sentiment", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: withClientHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({
           topic_result: topicResult,
           custom_keywords: customKeywords
@@ -696,11 +784,18 @@ function Data() {
       if (!response.ok) throw new Error("Failed to submit sentiment job.");
 
       const { job_id } = await response.json();
+      setSentimentJobId(job_id);
 
       // Poll for progress
       const interval = setInterval(async () => {
         try {
-          const progressRes = await fetch(`/api/progress/${job_id}`);
+          const progressRes = await fetch(`/api/progress/${job_id}`, {
+            headers: withClientHeaders()
+          });
+          if (!progressRes.ok) {
+            const errorPayload = await progressRes.json().catch(() => ({}));
+            throw new Error(errorPayload.error || `Progress check failed (${progressRes.status})`);
+          }
           const progress = await progressRes.json();
 
           if (progress.message) setProgressMessage(progress.message);
@@ -710,7 +805,13 @@ function Data() {
           if (progress.stage === "done") {
             clearInterval(interval);
 
-            const resultRes = await fetch(`/api/get_result/${job_id}`);
+            const resultRes = await fetch(`/api/get_result/${job_id}`, {
+              headers: withClientHeaders()
+            });
+            if (!resultRes.ok) {
+              const errorPayload = await resultRes.json().catch(() => ({}));
+              throw new Error(errorPayload.error || `Result fetch failed (${resultRes.status})`);
+            }
             const resultData = await resultRes.json();
 
             // Extract sentiment array
@@ -753,12 +854,9 @@ function Data() {
 
 //   const getSubredditIcon = async (subreddit) => {
 //     try {
-//       //console.log('Test Icon')
 //       if (subreddit === prevSubredditRef.current) {
-//         //console.log('Same subreddit, skipping API call');
 //         return;
 //       }
-//       //console.log('Called')
 //       const response = await fetch(`https://www.reddit.com/r/${subreddit}/about.json`);
 //       const data = await response.json();
 //       let subredditIcon = data.data.community_icon;
@@ -794,7 +892,6 @@ function Data() {
 
   const handleSaveResults = async () => {
     try {
-      console.log(topicResult)
       const response = await fetch("/api/save_result", {
         method: "POST",
         headers: {
@@ -841,12 +938,6 @@ function Data() {
     const updated = existing.length ? `${existing.join(", ")}, ${next}` : next;
     setCustomKeywordsInput(updated);
   };
-
-  useEffect(() => {
-    if (clusteringResults?.sentiment) {
-      console.log("Sentiment Structure Check:", clusteringResults.sentiment);
-    }
-  }, [clusteringResults]);
 
   return (
     <div className="container mt-5">
@@ -1024,6 +1115,53 @@ function Data() {
                     minCountThreshold={sentimentMinCountThreshold}
                     showMatchCounts={showWeightedMatchCounts}
                   />
+                </div>
+                <div className="mt-4">
+                  <h5>Keyword Match Samples</h5>
+                  <p className="mb-2" style={{ color: "#d0d4d9" }}>
+                    Sample posts/comments matched to each keyword with predicted sentiment.
+                  </p>
+                  {sentimentEvidenceEntries.length === 0 ? (
+                    <div className="text-muted">No sample matches available.</div>
+                  ) : (
+                    sentimentEvidenceEntries.map((entry, idx) => (
+                      <details
+                        key={`${entry.topicNumber}-${entry.keyword}-${idx}`}
+                        className="mb-2 p-2 border rounded"
+                      >
+                        <summary style={{ cursor: "pointer" }}>
+                          Topic {entry.topicNumber} - "{entry.keyword}" (
+                          {entry.total} classified
+                          {entry.sampledCount > 0 ? `, ${entry.sampledCount} sampled` : ""}
+                          {entry.matchedCount > 0 ? `, ${entry.matchedCount} matched` : ""})
+                        </summary>
+                        <div className="mt-2">
+                          {[...entry.examples]
+                            .sort((a, b) => {
+                              const rank = { negative: 0, neutral: 1, positive: 2 };
+                              const aRank = rank[(a?.label || "").toLowerCase()] ?? 3;
+                              const bRank = rank[(b?.label || "").toLowerCase()] ?? 3;
+                              if (aRank !== bRank) return aRank - bRank;
+                              return (b?.score || 0) - (a?.score || 0);
+                            })
+                            .map((example, exampleIdx) => (
+                            <div key={exampleIdx} className="mb-2 p-2 border rounded">
+                              <div className="mb-1">
+                                <strong>{exampleIdx + 1}.</strong>{" "}
+                                <span className={getSentimentBadgeClass(example.label)}>
+                                  {example.label}
+                                </span>{" "}
+                                <span style={{ color: "#d0d4d9" }}>({(example.score || 0).toFixed(3)})</span>
+                              </div>
+                              <div style={{ whiteSpace: "pre-wrap" }}>
+                                {renderHighlightedKeywordText(example.text, entry.keyword)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ))
+                  )}
                 </div>
 
               </>

@@ -5,7 +5,7 @@ hello: check-env down
 
 local: check-env down
 	docker compose build
-	RUNNINGLOCAL=true docker compose up --detach --scale rabbitmq=0 --scale app=0
+	RUNNINGLOCAL=true docker compose up --detach --scale rabbitmq=0 --scale app=0 --scale progress_consumer=0
 	make logs
 
 down:
