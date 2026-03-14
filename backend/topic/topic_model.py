@@ -318,7 +318,6 @@ class TopicModeling():
 
 
     def publish_progress(self, stage, message, percent):
-        client_id = self.config.get("client_id") or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
                 host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
@@ -329,7 +328,7 @@ class TopicModeling():
             )
         )
         channel = connection.channel()
-        progress_queue = f"progress_queue_{client_id}"
+        progress_queue = "progress_queue"
         channel.queue_declare(queue=progress_queue, durable=True)
 
         progress_message = {
@@ -521,7 +520,6 @@ class TopicModeling():
 
 
     def send_groups(self):
-        client_id = self.config.get("client_id") or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(
                 host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
@@ -533,7 +531,7 @@ class TopicModeling():
             )
         )
         channel = connection.channel()
-        results_queue = f"results_queue_{client_id}"
+        results_queue = "results_queue"
         channel.queue_declare(queue=results_queue, durable=True)
         
         # Create a meta-data dictionary with additional details.

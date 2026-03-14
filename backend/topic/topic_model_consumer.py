@@ -67,8 +67,7 @@ def callback(ch, method, properties, body):
 
         # Publish the reply to the callback queue specified in properties.reply_to
         response_body = json.dumps(result_message)
-        client_id = config_copy.get("client_id") or os.getenv("CLIENT_ID") or __import__("socket").gethostname()
-        results_queue = f"results_queue_{client_id}"
+        results_queue = "results_queue"
         channel.queue_declare(queue=results_queue, durable=True)
         ch.basic_publish(
             exchange='',
