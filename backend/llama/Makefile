@@ -1,9 +1,11 @@
 .PHONY: yep stop
 
+OLLAMA_BIND ?= 127.0.0.1:11434:11434
+
 yep: down build
 	-docker network create ocss
 
-	docker run -d --network ocss --name ollama_container --gpus "device=1" -p 11434:11434 ollama/ollama
+	docker run -d --network ocss --name ollama_container --gpus "device=1" -p $(OLLAMA_BIND) ollama/ollama
 	# export $(shell grep -v '^#' .env | xargs) && \
 	# docker run -d  --gpus all \
 	# --name ollama_container \
