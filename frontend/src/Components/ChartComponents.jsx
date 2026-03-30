@@ -94,7 +94,7 @@ export function FirstKeywordSentimentChart({ sentiment, minCountThreshold = 10 }
 }
 
 
-export function WeightedSentimentChart({
+export function SignedSentimentChart({
   sentiment,
   minCountThreshold = 10,
   showMatchCounts = false
@@ -108,6 +108,8 @@ export function WeightedSentimentChart({
         item?.sentiment?.[0]?.keyword ||
         item?.ctfidfKeywords?.split(',')[0]?.trim() ||
         `Topic ${item?.topicNumber ?? ""}`,
+      signed_sentiment_mean: item?.sentiment?.[0]?.sentiment?.signed_sentiment_mean,
+      signed_sentiment_median: item?.sentiment?.[0]?.sentiment?.signed_sentiment_median,
       negative: s.negative || { count: 0, avg_score: 0 },
       neutral: s.neutral || { count: 0, avg_score: 0 },
       positive: s.positive || { count: 0, avg_score: 0 }
@@ -123,20 +125,30 @@ export function WeightedSentimentChart({
   const totals = filtered.map(item =>
     (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0)
   );
-  const weighted = filtered.map(item => {
+  const signedMean = filtered.map(item => {
+    const signed = item?.signed_sentiment_mean;
+    if (typeof signed === 'number' && Number.isFinite(signed)) {
+      return signed;
+    }
+
+    // Fallback for older payloads that do not yet include signed sentiment.
     const neg = (item.negative.count || 0) * -(item.negative.avg_score || 0);
     const pos = (item.positive.count || 0) *  (item.positive.avg_score || 0);
     const total = (item.negative.count || 0) + (item.neutral.count || 0) + (item.positive.count || 0);
     return total > 0 ? (neg + pos) / total : 0;
   });
-  const bg = weighted.map(v => getBarColor(v).background);
-  const bd = weighted.map(v => getBarColor(v).border);
+  const signedMedian = filtered.map(item => {
+    const signed = item?.signed_sentiment_median;
+    return typeof signed === 'number' && Number.isFinite(signed) ? signed : null;
+  });
+  const bg = signedMean.map(v => getBarColor(v).background);
+  const bd = signedMean.map(v => getBarColor(v).border);
 
   const data = {
     labels,
     datasets: [{
-      label: 'Weighted Sentiment',
-      data: weighted,
+      label: 'Mean Sentiment',
+      data: signedMean,
       backgroundColor: bg,
       borderColor: bd,
       borderWidth: 1
@@ -167,10 +179,25 @@ export function WeightedSentimentChart({
       }
     },
     scales: {
-      y: { min: -1, max: 1, beginAtZero: true, title: { display: true, text: 'Weighted Score' } },
+      y: { min: -1, max: 1, beginAtZero: true, title: { display: true, text: 'Mean Signed Sentiment' } },
       x: { title: { display: true, text: 'Top Keyword' } }
     },
-    plugins: { legend: { position: 'bottom' } }
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const index = context.dataIndex;
+            const lines = [`Mean sentiment: ${signedMean[index].toFixed(3)}`];
+            if (typeof signedMedian[index] === 'number') {
+              lines.push(`Median sentiment: ${signedMedian[index].toFixed(3)}`);
+            }
+            lines.push(`Classified posts/comments: ${totals[index]}`);
+            return lines;
+          }
+        }
+      }
+    }
   };
 
   const handleDownloadWeighted = () => {
@@ -183,7 +210,7 @@ export function WeightedSentimentChart({
     const url = instance.toBase64Image();
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'weighted-sentiment-chart.png';
+    a.download = 'signed-sentiment-chart.png';
     a.click();
   };
 
@@ -191,7 +218,7 @@ export function WeightedSentimentChart({
     <div>
       {showMatchCounts && (
         <div className="small text-muted mb-2">
-          Numbers above bars show matched posts/comments per keyword.
+          Numbers above bars show classified posts/comments per keyword.
         </div>
       )}
       <Bar
@@ -203,7 +230,7 @@ export function WeightedSentimentChart({
         onClick={handleDownloadWeighted} 
         className="btn btn-secondary mt-2"
       >
-        <i className="bi bi-download me-1"></i> Download Weighted Chart
+        <i className="bi bi-download me-1"></i> Download Signed Sentiment Chart
       </button>
     </div>
   );

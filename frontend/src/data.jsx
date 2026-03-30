@@ -23,7 +23,7 @@ import TopicTablesContainer from './Components/TopicTablesContainer';
 import handleNotify from './Components/Toast';
 import SearchSuggestions from './Components/SearchSuggestions';
 import SearchHistory from './Components/SearchHistory';
-import { FirstKeywordSentimentChart, WeightedSentimentChart } from './Components/ChartComponents';
+import { FirstKeywordSentimentChart, SignedSentimentChart } from './Components/ChartComponents';
 
 
 
@@ -67,7 +67,7 @@ function Data() {
   const [sentimentJobId, setSentimentJobId] = useState(null);
   const [customKeywordsInput, setCustomKeywordsInput] = useState('');
   const [sentimentUsedCustomKeywords, setSentimentUsedCustomKeywords] = useState(false);
-  const [showWeightedMatchCounts, setShowWeightedMatchCounts] = useState(false);
+  const [showSignedMatchCounts, setShowSignedMatchCounts] = useState(false);
   const [loadingTopic, setLoadingTopic] = useState(false);
   const [loadingSentiment, setLoadingSentiment] = useState(false);
   const [error, setError] = useState(null);
@@ -1102,18 +1102,18 @@ function Data() {
                     <input
                       className="form-check-input"
                       type="checkbox"
-                      id="showWeightedMatchCounts"
-                      checked={showWeightedMatchCounts}
-                      onChange={(e) => setShowWeightedMatchCounts(e.target.checked)}
+                      id="showSignedMatchCounts"
+                      checked={showSignedMatchCounts}
+                      onChange={(e) => setShowSignedMatchCounts(e.target.checked)}
                     />
-                    <label className="form-check-label" htmlFor="showWeightedMatchCounts">
-                      Show matched post/comment counts above weighted bars
+                    <label className="form-check-label" htmlFor="showSignedMatchCounts">
+                      Show classified post/comment counts above sentiment bars
                     </label>
                   </div>
-                  <WeightedSentimentChart
+                  <SignedSentimentChart
                     sentiment={sentimentResult}
                     minCountThreshold={sentimentMinCountThreshold}
-                    showMatchCounts={showWeightedMatchCounts}
+                    showMatchCounts={showSignedMatchCounts}
                   />
                 </div>
                 <div className="mt-4">

@@ -1,7 +1,7 @@
 import os
 import torch
 from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
-from collections import defaultdict
+from statistics import median
 
 # Set your Hugging Face API token
 HUGGINGFACE_API_TOKEN = os.getenv('HUGGINGFACEHUB_API_TOKEN', "***REMOVED***")
@@ -32,7 +32,8 @@ def run_nli_aspect_analysis(
 ):
     """
     For each (term, topic), batch all its example texts in one zero‑shot call.
-    Returns a dict keyed by (term, topic) → {occurrences, positive/neutral/negative buckets}.
+    Returns a dict keyed by (term, topic) with class buckets plus signed sentiment
+    aggregates computed from the full label probability distribution for each text.
     """
     LABELS = ["positive","neutral","negative"]
     stats = {}
@@ -61,25 +62,42 @@ def run_nli_aspect_analysis(
                 "occurrences": 0,
                 "matched_count": len(bodies),
                 "sampled_count": len(texts),
+                "signed_sentiment_mean": 0.0,
+                "signed_sentiment_median": 0.0,
                 "positive": {"count": 0, "avg_score": 0.0},
                 "neutral":  {"count": 0, "avg_score": 0.0},
                 "negative": {"count": 0, "avg_score": 0.0},
-                "examples": []
+                "examples": [],
+                "_signed_scores": []
             }
 
         # out is a list of { labels: [...], scores: [...] }
         for text, res in zip(texts, out):
+            label_scores = {
+                label: float(score)
+                for label, score in zip(res["labels"], res["scores"])
+            }
+            positive_score = label_scores.get("positive", 0.0)
+            negative_score = label_scores.get("negative", 0.0)
+            neutral_score = label_scores.get("neutral", 0.0)
+            signed_score = positive_score - negative_score
+
             # pick top label
             lbl, scr = res["labels"][0], res["scores"][0]
             bucket = stats[key][lbl]
             stats[key]["occurrences"] += 1
             bucket["count"]     += 1
             bucket["avg_score"] += scr
+            stats[key]["_signed_scores"].append(signed_score)
 
             if len(stats[key]["examples"]) < max_examples_per_term:
                 stats[key]["examples"].append({
                     "label": lbl,
                     "score": float(scr),
+                    "signed_score": signed_score,
+                    "positive_score": positive_score,
+                    "neutral_score": neutral_score,
+                    "negative_score": negative_score,
                     "text": text
                 })
 
@@ -89,5 +107,9 @@ def run_nli_aspect_analysis(
             cnt = v[sentiment]["count"]
             if cnt:
                 v[sentiment]["avg_score"] /= cnt
+        signed_scores = v.pop("_signed_scores", [])
+        if signed_scores:
+            v["signed_sentiment_mean"] = sum(signed_scores) / len(signed_scores)
+            v["signed_sentiment_median"] = median(signed_scores)
 
     return stats
