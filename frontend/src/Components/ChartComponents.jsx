@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Chart } from 'react-chartjs-2';
+import 'chartjs-chart-box-and-violin-plot/build/Chart.BoxPlot.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -231,6 +232,125 @@ export function SignedSentimentChart({
         className="btn btn-secondary mt-2"
       >
         <i className="bi bi-download me-1"></i> Download Signed Sentiment Chart
+      </button>
+    </div>
+  );
+}
+
+export function SentimentDistributionChart({ sentiment, minCountThreshold = 10 }) {
+  const chartRef = useRef(null);
+
+  const normalized = (Array.isArray(sentiment) ? sentiment : []).map(item => {
+    const s = item?.sentiment?.[0]?.sentiment || {};
+    const signedScores = Array.isArray(s.signed_scores)
+      ? s.signed_scores.filter((score) => typeof score === 'number' && Number.isFinite(score))
+      : [];
+
+    return {
+      label:
+        item?.sentiment?.[0]?.keyword ||
+        item?.ctfidfKeywords?.split(',')[0]?.trim() ||
+        `Topic ${item?.topicNumber ?? ""}`,
+      signedScores,
+      signed_sentiment_mean: s.signed_sentiment_mean,
+      signed_sentiment_median: s.signed_sentiment_median,
+      total:
+        (s.negative?.count || 0) +
+        (s.neutral?.count || 0) +
+        (s.positive?.count || 0)
+    };
+  });
+
+  const filtered = normalized.filter((item) =>
+    item.total >= minCountThreshold && item.signedScores.length > 0
+  );
+
+  const data = {
+    labels: filtered.map((item) => item.label),
+    datasets: [{
+      label: 'Sentiment Distribution',
+      data: filtered.map((item) => item.signedScores),
+      backgroundColor: filtered.map((item) => getBarColor(item.signed_sentiment_mean || 0).background),
+      borderColor: filtered.map((item) => getBarColor(item.signed_sentiment_mean || 0).border),
+      borderWidth: 1,
+      outlierColor: '#ffffff',
+      padding: 10,
+      itemRadius: 0
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        min: -1,
+        max: 1,
+        title: { display: true, text: 'Signed Sentiment Distribution' }
+      },
+      x: { title: { display: true, text: 'Top Keyword' } }
+    },
+    plugins: {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const item = filtered[context.dataIndex];
+            const mean = typeof item?.signed_sentiment_mean === 'number'
+              ? item.signed_sentiment_mean.toFixed(3)
+              : 'N/A';
+            const median = typeof item?.signed_sentiment_median === 'number'
+              ? item.signed_sentiment_median.toFixed(3)
+              : 'N/A';
+            return [
+              `Classified posts/comments: ${item?.total ?? 0}`,
+              `Mean sentiment: ${mean}`,
+              `Median sentiment: ${median}`
+            ];
+          }
+        }
+      }
+    }
+  };
+
+  const handleDownload = () => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const instance = chart.current ? chart.current : chart;
+    const url = instance.toBase64Image();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sentiment-distribution-boxplot.png';
+    a.click();
+  };
+
+  if (filtered.length === 0) {
+    return (
+      <div className="text-muted">
+        No distribution data available for the current sentiment results.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="small text-muted mb-2">
+        Box-and-whisker plots show how widely sentiment varies across the classified posts/comments for each keyword.
+      </div>
+      <div style={{ height: 420 }}>
+        <Chart
+          ref={chartRef}
+          type="boxplot"
+          data={data}
+          options={options}
+        />
+      </div>
+      <button
+        onClick={handleDownload}
+        className="btn btn-secondary mt-2"
+      >
+        <i className="bi bi-download me-1"></i> Download Distribution Chart
       </button>
     </div>
   );

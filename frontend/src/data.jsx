@@ -23,7 +23,7 @@ import TopicTablesContainer from './Components/TopicTablesContainer';
 import handleNotify from './Components/Toast';
 import SearchSuggestions from './Components/SearchSuggestions';
 import SearchHistory from './Components/SearchHistory';
-import { FirstKeywordSentimentChart, SignedSentimentChart } from './Components/ChartComponents';
+import { FirstKeywordSentimentChart, SignedSentimentChart, SentimentDistributionChart } from './Components/ChartComponents';
 
 
 
@@ -1114,6 +1114,16 @@ function Data() {
                     sentiment={sentimentResult}
                     minCountThreshold={sentimentMinCountThreshold}
                     showMatchCounts={showSignedMatchCounts}
+                  />
+                </div>
+                <div style={{ marginTop: '2rem', marginBottom: '2rem' }}>
+                  <h5>Sentiment Distribution</h5>
+                  <p className="mb-2" style={{ color: "#d0d4d9" }}>
+                    Box-and-whisker plots highlight how varied the per-post sentiment is for each keyword.
+                  </p>
+                  <SentimentDistributionChart
+                    sentiment={sentimentResult}
+                    minCountThreshold={sentimentMinCountThreshold}
                   />
                 </div>
                 <div className="mt-4">

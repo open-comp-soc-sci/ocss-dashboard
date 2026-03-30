@@ -64,6 +64,7 @@ def run_nli_aspect_analysis(
                 "sampled_count": len(texts),
                 "signed_sentiment_mean": 0.0,
                 "signed_sentiment_median": 0.0,
+                "signed_scores": [],
                 "positive": {"count": 0, "avg_score": 0.0},
                 "neutral":  {"count": 0, "avg_score": 0.0},
                 "negative": {"count": 0, "avg_score": 0.0},
@@ -109,6 +110,7 @@ def run_nli_aspect_analysis(
                 v[sentiment]["avg_score"] /= cnt
         signed_scores = v.pop("_signed_scores", [])
         if signed_scores:
+            v["signed_scores"] = signed_scores
             v["signed_sentiment_mean"] = sum(signed_scores) / len(signed_scores)
             v["signed_sentiment_median"] = median(signed_scores)
 
