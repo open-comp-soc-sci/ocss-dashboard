@@ -498,7 +498,12 @@ class TopicModeling():
         doc_groups = np.array([topic_to_group.get(int(topic), 0) for topic in topic_arr])
         valid_mask = topic_arr >= 0
 
-        plot_df = pd.DataFrame({'x': vis_arr[:, 0], 'y': vis_arr[:, 1], 'group': doc_groups, 'topic': topic_arr})
+        topic_labels = getattr(getattr(self, 'topic_labeler', None), 'topic_labels', {})
+        group_labels = getattr(getattr(self, 'group_labeler', None), 'group_labels', {})
+        plot_df = pd.DataFrame({'x': vis_arr[:, 0], 'y': vis_arr[:, 1], 'group': doc_groups, 'topic': topic_arr,
+            'topic_label': [topic_labels.get(int(topic), f'Topic {int(topic)}') for topic in topic_arr],
+            'group_label': [group_labels.get(int(group), f'Group {int(group)}') for group in doc_groups]
+        })
         plot_df = plot_df.loc[valid_mask].copy()
         if plot_df.empty:
             raise ValueError("No non-noise documents available to plot.")
@@ -506,23 +511,20 @@ class TopicModeling():
         plot_subtitle = self._get_plot_subtitle()
         self._save_cluster_plot(
             plot_df=plot_df,
-            hue_col='topic',
+            hue_col='topic_label',
             output_path=os.path.join(save_dir, 'figure_topics_bytopic.png'),
             title='Topics within Discussions',
             subtitle=plot_subtitle,
-            legend_title='Topics',
-            legend_labels=getattr(getattr(self, 'topic_labeler', None), 'topic_labels', {})
+            legend_title='Topics'
         )
 
-        group_labels = getattr(getattr(self, 'group_labeler', None), 'group_labels', {})
         self._save_cluster_plot(
             plot_df=plot_df,
-            hue_col='group',
+            hue_col='group_label',
             output_path=os.path.join(save_dir, 'figure_topics_bygroup.png'),
             title='Topics, Grouped by Similarity of Content',
             subtitle=plot_subtitle,
-            legend_title='Groups',
-            legend_labels=group_labels
+            legend_title='Groups'
         )
 
     def _get_plot_subtitle(self):
@@ -546,7 +548,7 @@ class TopicModeling():
             return cleaned
         return parsed.strftime("%m/%d/%Y")
 
-    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, subtitle, legend_title, legend_labels=None):
+    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, subtitle, legend_title):
         with sns.plotting_context('notebook'):
             sns.set_style('white')
             fig, ax = plt.subplots(figsize=(10, 9))
@@ -566,12 +568,9 @@ class TopicModeling():
                 ax=ax
             )
             handles, _ = ax.get_legend_handles_labels()
-            labels = [str(value) for value in unique_values] if legend_labels is None else [
-                legend_labels.get(value, f'{legend_title[:-1]} {value}') for value in unique_values
-            ]
             ax.legend(
                 handles=handles[:len(unique_values)],
-                labels=labels,
+                labels=unique_values,
                 bbox_to_anchor=(1.02, -0.02),
                 loc='lower left',
                 borderaxespad=1,
