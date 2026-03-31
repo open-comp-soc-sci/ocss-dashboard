@@ -508,23 +508,24 @@ class TopicModeling():
         if plot_df.empty:
             raise ValueError("No non-noise documents available to plot.")
 
+        topic_counts = plot_df['topic_label'].value_counts()
+        top_topic_labels = topic_counts.head(20).index.tolist()
+        plot_df['topic_plot_label'] = plot_df['topic_label'].where(plot_df['topic_label'].isin(top_topic_labels), 'Other')
+        topic_order = top_topic_labels + (['Other'] if len(topic_counts) > len(top_topic_labels) else [])
+        topic_palette = {label: color for label, color in zip(top_topic_labels, sns.color_palette('tab20', n_colors=len(top_topic_labels)))}
+        if 'Other' in topic_order:
+            topic_palette['Other'] = '#b0b0b0'
+
         plot_subtitle = self._get_plot_subtitle()
         self._save_cluster_plot(
             plot_df=plot_df,
-            hue_col='topic_label',
+            hue_col='topic_plot_label',
             output_path=os.path.join(save_dir, 'figure_topics_bytopic.png'),
             title='Topics within Discussions',
             subtitle=plot_subtitle,
-            legend_title='Topics'
-        )
-
-        self._save_cluster_plot(
-            plot_df=plot_df,
-            hue_col='group_label',
-            output_path=os.path.join(save_dir, 'figure_topics_bygroup.png'),
-            title='Topics, Grouped by Similarity of Content',
-            subtitle=plot_subtitle,
-            legend_title='Groups'
+            legend_title='Topics',
+            hue_order=topic_order,
+            palette_map=topic_palette
         )
 
     def _get_plot_subtitle(self):
@@ -548,18 +549,20 @@ class TopicModeling():
             return cleaned
         return parsed.strftime("%m/%d/%Y")
 
-    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, subtitle, legend_title):
+    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, subtitle, legend_title, hue_order=None, palette_map=None):
         with sns.plotting_context('notebook'):
             sns.set_style('white')
             fig, ax = plt.subplots(figsize=(10, 9))
-            unique_values = sorted(plot_df[hue_col].unique())
-            palette = sns.color_palette('Set1', n_colors=max(len(unique_values), 1))
-            palette_map = {value: palette[idx] for idx, value in enumerate(unique_values)}
+            unique_values = hue_order or sorted(plot_df[hue_col].unique())
+            if palette_map is None:
+                palette = sns.color_palette('Set1', n_colors=max(len(unique_values), 1))
+                palette_map = {value: palette[idx] for idx, value in enumerate(unique_values)}
             ax = sns.scatterplot(
                 data=plot_df,
                 x='x',
                 y='y',
                 hue=hue_col,
+                hue_order=unique_values,
                 alpha=0.5,
                 s=30,
                 palette=palette_map,
