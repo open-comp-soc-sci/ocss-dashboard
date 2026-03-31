@@ -105,6 +105,11 @@ class TopicModeling():
     def __init__(self, config=config):
         self.config = config
 
+    def _get_save_dir(self):
+        save_dir = self.config.get('save_dir', 'saved')
+        os.makedirs(save_dir, exist_ok=True)
+        return save_dir
+
     def run(self):
         self.publish_progress("load_data_frame", "Fetching data from ClickHouse", 1/7)
         self.load_data_frame()
@@ -122,7 +127,7 @@ class TopicModeling():
         self.label_groups()
 
         # self.send_groups()
-        # self.plot_topics()
+        self.plot_topics()
 
         self.publish_progress("create_topic_table", "Preparing final results", 6/7)
         self.create_topic_table()
@@ -299,8 +304,7 @@ class TopicModeling():
 
         # self.topics = filtered_topics
 
-        if not os.path.exists(self.config['save_dir']):
-            os.makedirs(self.config['save_dir'])
+        self._get_save_dir()
         # self.topic_model.save(f'{self.config["save_dir"]}/topic_model.pickle', save_ctfidf=True)
         # with open(f'{self.config["save_dir"]}/topics.pickle', 'wb') as fh:
             # import pickle
@@ -467,25 +471,97 @@ class TopicModeling():
         print("top silhouette score: {0:0.3f} for at n_clusters {1}".format(np.max(ss), cluster_arr[np.argmax(ss)]))    
         return ideal_n_clusters
 
-        def plot_topics(self):
-            with sns.plotting_context('notebook'):
-                sns.set_style('white')
-                plt.figure(figsize=(10, 5))
-                vis_arr = self.c_tf_idf_vis
-                n_clusters = self.groups.max() - self.groups.min() + 1
-                ax = sns.scatterplot(x=vis_arr[:, 0], y=vis_arr[:, 1],
-                                    size=self.topic_model.get_topic_info()['Count'],
-                                    hue=self.groups,
-                                    sizes=(100, 5000),
-                                    alpha=0.5, palette='tab20', legend=True, edgecolor='k')
-                h, l = ax.get_legend_handles_labels()
-                plt.legend(h[0:n_clusters], l[0:n_clusters], bbox_to_anchor=(-0.011, -1.95), loc='lower left', borderaxespad=1, fontsize=10)
-                ax.set_title('Topics, Grouped by Similarity of Content', fontsize=16, pad=10)
-                ax.set_xlabel('Feature 1')
-                ax.set_ylabel('Feature 2')
-                ax.set_xticklabels([])
-                ax.set_yticklabels([])
-                ax.figure.savefig(f'{self.config["save_dir"]}/figure_topics_bydisc.png', dpi=300, bbox_inches="tight")
+    def plot_topics(self):
+        save_dir = self._get_save_dir()
+        doc_embeddings = np.asarray(self.embeddings)
+        if doc_embeddings.ndim != 2 or doc_embeddings.shape[0] == 0:
+            raise ValueError(f"Invalid document embedding shape: {doc_embeddings.shape}")
+
+        n_docs = doc_embeddings.shape[0]
+        if n_docs == 1:
+            vis_arr = np.array([[0.0, 0.0]])
+        else:
+            n_neighbors_vis = min(15, n_docs - 1)
+            vis_arr = UMAP(
+                n_neighbors=n_neighbors_vis,
+                n_components=2,
+                min_dist=0.1,
+                metric='cosine',
+                random_state=self.config['random_state']
+            ).fit_transform(doc_embeddings)
+
+        topic_arr = np.asarray(self.topics)
+        if topic_arr.shape[0] != n_docs:
+            raise ValueError(f"Document embeddings ({n_docs}) and topic assignments ({topic_arr.shape[0]}) do not match.")
+
+        topic_to_group = {topic_idx: int(group) for topic_idx, group in enumerate(np.asarray(self.groups))}
+        doc_groups = np.array([topic_to_group.get(int(topic), 0) for topic in topic_arr])
+        valid_mask = topic_arr >= 0
+
+        plot_df = pd.DataFrame({'x': vis_arr[:, 0], 'y': vis_arr[:, 1], 'group': doc_groups, 'topic': topic_arr})
+        plot_df = plot_df.loc[valid_mask].copy()
+        if plot_df.empty:
+            raise ValueError("No non-noise documents available to plot.")
+
+        self._save_cluster_plot(
+            plot_df=plot_df,
+            hue_col='topic',
+            output_path=os.path.join(save_dir, 'figure_topics_bytopic.png'),
+            title='Topics within Discussions',
+            legend_title='Topics',
+            legend_labels=getattr(getattr(self, 'topic_labeler', None), 'topic_labels', {})
+        )
+
+        group_labels = getattr(getattr(self, 'group_labeler', None), 'group_labels', {})
+        self._save_cluster_plot(
+            plot_df=plot_df,
+            hue_col='group',
+            output_path=os.path.join(save_dir, 'figure_topics_bygroup.png'),
+            title='Topics, Grouped by Similarity of Content',
+            legend_title='Groups',
+            legend_labels=group_labels
+        )
+
+    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, legend_title, legend_labels=None):
+        with sns.plotting_context('notebook'):
+            sns.set_style('white')
+            fig, ax = plt.subplots(figsize=(10, 9))
+            unique_values = sorted(plot_df[hue_col].unique())
+            palette = sns.color_palette('Set1', n_colors=max(len(unique_values), 1))
+            palette_map = {value: palette[idx] for idx, value in enumerate(unique_values)}
+            ax = sns.scatterplot(
+                data=plot_df,
+                x='x',
+                y='y',
+                hue=hue_col,
+                alpha=0.5,
+                s=30,
+                palette=palette_map,
+                legend=True,
+                linewidth=0,
+                ax=ax
+            )
+            handles, _ = ax.get_legend_handles_labels()
+            labels = [str(value) for value in unique_values] if legend_labels is None else [
+                legend_labels.get(value, f'{legend_title[:-1]} {value}') for value in unique_values
+            ]
+            ax.legend(
+                handles=handles[:len(unique_values)],
+                labels=labels,
+                bbox_to_anchor=(1.02, -0.02),
+                loc='lower left',
+                borderaxespad=1,
+                fontsize=10,
+                title=legend_title
+            )
+            ax.set_title(title, fontsize=16, pad=10)
+            ax.set_xlabel('Feature 1')
+            ax.set_ylabel('Feature 2')
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            fig.savefig(output_path, dpi=300, bbox_inches="tight")
+            plt.close(fig)
+            print(f"plot saved to {output_path}")
 
     def create_topic_table(self):
         df, topics, embeddings = self.df, self.topics, self.embeddings
