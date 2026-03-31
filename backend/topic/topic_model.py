@@ -503,11 +503,13 @@ class TopicModeling():
         if plot_df.empty:
             raise ValueError("No non-noise documents available to plot.")
 
+        plot_subtitle = self._get_plot_subtitle()
         self._save_cluster_plot(
             plot_df=plot_df,
             hue_col='topic',
             output_path=os.path.join(save_dir, 'figure_topics_bytopic.png'),
             title='Topics within Discussions',
+            subtitle=plot_subtitle,
             legend_title='Topics',
             legend_labels=getattr(getattr(self, 'topic_labeler', None), 'topic_labels', {})
         )
@@ -518,11 +520,33 @@ class TopicModeling():
             hue_col='group',
             output_path=os.path.join(save_dir, 'figure_topics_bygroup.png'),
             title='Topics, Grouped by Similarity of Content',
+            subtitle=plot_subtitle,
             legend_title='Groups',
             legend_labels=group_labels
         )
 
-    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, legend_title, legend_labels=None):
+    def _get_plot_subtitle(self):
+        subreddit = self.config.get('subreddit', '') or 'All subreddits'
+        start_date = self._format_plot_date(self.config.get('startDate', '')) or 'Beginning'
+        end_date = self._format_plot_date(self.config.get('endDate', '')) or 'Latest'
+        return f"r/{subreddit} | {start_date} to {end_date}"
+
+    @staticmethod
+    def _format_plot_date(value):
+        if not value:
+            return ""
+        cleaned = str(value).replace("T", " ").split(".")[0].strip()
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y"):
+            try:
+                return pd.to_datetime(cleaned, format=fmt).strftime("%m/%d/%Y")
+            except (ValueError, TypeError):
+                continue
+        parsed = pd.to_datetime(cleaned, errors='coerce')
+        if pd.isna(parsed):
+            return cleaned
+        return parsed.strftime("%m/%d/%Y")
+
+    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, subtitle, legend_title, legend_labels=None):
         with sns.plotting_context('notebook'):
             sns.set_style('white')
             fig, ax = plt.subplots(figsize=(10, 9))
@@ -554,7 +578,7 @@ class TopicModeling():
                 fontsize=10,
                 title=legend_title
             )
-            ax.set_title(title, fontsize=16, pad=10)
+            ax.set_title(f"{title}\n{subtitle}", fontsize=16, pad=10)
             ax.set_xlabel('Feature 1')
             ax.set_ylabel('Feature 2')
             ax.set_xticklabels([])
