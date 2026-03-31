@@ -513,8 +513,11 @@ class TopicModeling():
         plot_df['topic_plot_label'] = plot_df['topic_label'].where(plot_df['topic_label'].isin(top_topic_labels), 'Other')
         topic_order = top_topic_labels + (['Other'] if len(topic_counts) > len(top_topic_labels) else [])
         topic_palette = {label: color for label, color in zip(top_topic_labels, sns.color_palette('tab20', n_colors=len(top_topic_labels)))}
+        topic_legend_labels = [f"({int(topic_counts[label])}) {label}" for label in top_topic_labels]
         if 'Other' in topic_order:
             topic_palette['Other'] = '#b0b0b0'
+            other_count = int(topic_counts.iloc[len(top_topic_labels):].sum())
+            topic_legend_labels.append(f"({other_count}) Other")
 
         plot_subtitle = self._get_plot_subtitle()
         self._save_cluster_plot(
@@ -523,9 +526,10 @@ class TopicModeling():
             output_path=os.path.join(save_dir, 'figure_topics_bytopic.png'),
             title='Topics within Discussions',
             subtitle=plot_subtitle,
-            legend_title='Topics',
+            legend_title='Topics by Post Volume',
             hue_order=topic_order,
-            palette_map=topic_palette
+            palette_map=topic_palette,
+            legend_labels=topic_legend_labels
         )
 
     def _get_plot_subtitle(self):
@@ -549,7 +553,7 @@ class TopicModeling():
             return cleaned
         return parsed.strftime("%m/%d/%Y")
 
-    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, subtitle, legend_title, hue_order=None, palette_map=None):
+    def _save_cluster_plot(self, plot_df, hue_col, output_path, title, subtitle, legend_title, hue_order=None, palette_map=None, legend_labels=None):
         with sns.plotting_context('notebook'):
             sns.set_style('white')
             fig, ax = plt.subplots(figsize=(10, 9))
@@ -573,7 +577,7 @@ class TopicModeling():
             handles, _ = ax.get_legend_handles_labels()
             ax.legend(
                 handles=handles[:len(unique_values)],
-                labels=unique_values,
+                labels=legend_labels or unique_values,
                 bbox_to_anchor=(1.02, -0.02),
                 loc='lower left',
                 borderaxespad=1,
