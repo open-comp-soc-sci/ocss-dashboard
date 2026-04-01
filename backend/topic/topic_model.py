@@ -523,7 +523,7 @@ class TopicModeling():
         self._save_cluster_plot(
             plot_df=plot_df,
             hue_col='topic_plot_label',
-            output_path=os.path.join(save_dir, 'figure_topics_bytopic.png'),
+            output_path=os.path.join(save_dir, 'figure_topic_clustering.pdf'),
             title='Topics within Discussions',
             subtitle=plot_subtitle,
             legend_title='Topics by Post Volume',

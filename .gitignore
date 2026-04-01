@@ -5,6 +5,7 @@ __pycache__/
 *pickle
 *xlsx
 *png
+*pdf
 node_modules
 package-lock.json
 .DS_Store
