@@ -117,7 +117,7 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None, client_id=None)
         for idx, first_kw in enumerate(normalized_custom):
             topic_num = idx + 1
             bodies = [b for b in df["body"] if _keyword_in_body(first_kw, b)]
-            bodies = list(dict.fromkeys(bodies))[:1000]
+            bodies = list(dict.fromkeys(bodies))
 
             progress_percent = ((idx + 1) / total_custom) if total_custom else 1
             publish_progress(
@@ -188,7 +188,7 @@ def keywords_sentiment(df, topics, job_id, custom_keywords=None, client_id=None)
 
         # collect bodies that mention that first keyword
         bodies = [b for b in df["body"] if _keyword_in_body(first_kw, b)]
-        bodies = list(dict.fromkeys(bodies))[:1000]
+        bodies = list(dict.fromkeys(bodies))
 
         # Publish progress
         progress_percent = ((idx + 1) / total_topics) if total_topics else 1

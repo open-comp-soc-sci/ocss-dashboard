@@ -29,6 +29,7 @@ CH_PORT=8123
 CH_DATABASE=default
 CH_USER=default
 CH_PASSWORD=heyheyhey
+HUGGINGFACEHUB_API_TOKEN=fillMeOut
 VITE_FIREBASE_API_KEY=fillMeOut
 VITE_FIREBASE_AUTH_DOMAIN=fillMeOut
 VITE_FIREBASE_PROJECT_ID=fillMeOut
@@ -37,6 +38,8 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=fillMeOut
 VITE_FIREBASE_APP_ID=fillMeOut
 VITE_FIREBASE_MEASUREMENT_ID=fillMeOut
 ```
+
+The frontend reads these `VITE_*` values from this root `.env` file for both Docker builds and local Vite runs.
 
 Which computers to use?
 

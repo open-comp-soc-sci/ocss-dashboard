@@ -19,3 +19,9 @@ sentiment analysis.
 sentiment_analysis_consumer calls roberta.py.
 
 roberta.py gets the data from readReddit which queries the backend.
+
+# env vars
+
+`nli_aspect.py` reads Hugging Face auth from `HUGGINGFACEHUB_API_TOKEN`.
+When running `make` in this folder, the Makefile uses the repo-root `.env`
+(`ocss-dashboard/.env`) as `--env-file`.
